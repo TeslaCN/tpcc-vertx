@@ -2,7 +2,12 @@ package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.Configurations;
 import io.vertx.core.Future;
-import io.vertx.sqlclient.*;
+import io.vertx.sqlclient.PreparedQuery;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.SqlConnection;
+import io.vertx.sqlclient.Transaction;
+import io.vertx.sqlclient.Tuple;
 
 import java.util.ArrayList;
 import java.util.List;
