@@ -29,8 +29,12 @@ public class Terminal {
 
     private final Promise<Terminal> stopPromise = Promise.promise();
 
+    private int newOrderCount;
+
     private int totalCount;
-    
+
+    private final NewOrderExecutor newOrderExecutor;
+
     private final OrderStatusExecutor orderStatusExecutor;
 
     public Terminal(int id, EventBus eventBus, SqlConnection connection) {
@@ -40,6 +44,7 @@ public class Terminal {
         this.eventBus = eventBus;
         address = "Terminal-" + id;
         consumer = eventBus.localConsumer(address);
+        newOrderExecutor = new NewOrderExecutor(random, connection);
         orderStatusExecutor = new OrderStatusExecutor(random, connection);
     }
 
@@ -56,9 +61,10 @@ public class Terminal {
             return;
         }
         (switch (message.body()) {
+            case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount++);
             case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute);
             // TODO complete transactions
-            case "NEW_ORDER", "PAYMENT", "STOCK_LEVEL", "DELIVERY" -> Future.succeededFuture();
+            case "PAYMENT", "STOCK_LEVEL", "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(__ -> totalCount++)
                 .recover(cause -> {
@@ -72,11 +78,15 @@ public class Terminal {
 
     private void sendNextTransaction() {
         // TODO complete transactions
-        eventBus.send(address, TPCCTransaction.ORDER_STATUS.name());
+        eventBus.send(address, random.nextInt(1, 10) == 1 ? TPCCTransaction.ORDER_STATUS.name() : TPCCTransaction.NEW_ORDER.name());
     }
 
     public void stop() {
         stop = true;
+    }
+    
+    public int getNewOrderCount() {
+        return newOrderCount;
     }
 
     public int getTotalCount() {

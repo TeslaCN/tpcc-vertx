@@ -67,6 +67,7 @@ public final class TPCC {
         });
         return CompositeFuture.all(futures)
                 .onSuccess(compositeFuture -> LOGGER.info("Total: {}", compositeFuture.<Terminal>list().stream().mapToInt(Terminal::getTotalCount).sum()))
+                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", compositeFuture.<Terminal>list().stream().mapToInt(Terminal::getNewOrderCount).sum()))
                 .onFailure(cause -> LOGGER.error("Error occurred:", cause))
                 .compose(__ -> Future.succeededFuture());
     }
