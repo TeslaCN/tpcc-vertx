@@ -12,6 +12,8 @@ import io.vertx.sqlclient.PoolOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -21,9 +23,16 @@ public final class TPCC {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TPCC.class);
 
-    private final Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(true).setEventLoopPoolSize(Runtime.getRuntime().availableProcessors()));
+    private final Vertx vertx = Vertx.vertx(new VertxOptions()
+            .setPreferNativeTransport(true)
+            .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
+            // We use the worker pool only when writing result to file.
+            .setWorkerPoolSize(1)
+    );
 
     private final Pool pool;
+
+    private final ResultRecorder resultRecorder;
 
     private final Terminal[] terminals = new Terminal[Configurations.TERMINALS];
 
@@ -34,6 +43,7 @@ public final class TPCC {
                 .setDatabase("bmsql")
                 .setUser("postgres")
                 .setPassword("postgres"), new PoolOptions().setMaxSize(32));
+        resultRecorder = new ResultRecorder(vertx, "/tmp/tpcc_result_" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()) + ".csv");
     }
 
     @SuppressWarnings("rawtypes")
@@ -51,13 +61,16 @@ public final class TPCC {
         return CompositeFuture.all(futures)
                 .compose(this::onTerminalsReady)
                 .onFailure(cause -> LOGGER.error("Failed to start terminals, caused by:", cause))
+                .eventually(__ -> resultRecorder.close())
                 .eventually(__ -> vertx.close());
     }
 
+    @SuppressWarnings("rawtypes")
     public Future<Void> onTerminalsReady(CompositeFuture succeeded) {
         LOGGER.info("Starting terminals.");
         List<Terminal> terminals = succeeded.list();
-        List<Future> futures = terminals.stream().map(Terminal::run).collect(Collectors.toList());
+        long sessionStartNanoTime = System.nanoTime();
+        List<Future> futures = terminals.stream().map(terminal -> terminal.run(sessionStartNanoTime)).collect(Collectors.toList());
         LOGGER.info("All terminals started.");
         vertx.setTimer(TimeUnit.SECONDS.toMillis(Configurations.SECONDS), event -> {
             LOGGER.info("Stopping terminals.");
