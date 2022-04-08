@@ -42,6 +42,8 @@ public class Terminal {
 
     private final OrderStatusExecutor orderStatusExecutor;
 
+    private final StockLevelExecutor stockLevelExecutor;
+
     public Terminal(int id, EventBus eventBus, SqlConnection connection) {
         this.id = id;
         this.random = new jTPCCRandom();
@@ -52,6 +54,7 @@ public class Terminal {
         resultProducer = eventBus.sender(ResultRecorder.ADDRESS);
         newOrderExecutor = new NewOrderExecutor(random, connection);
         orderStatusExecutor = new OrderStatusExecutor(random, connection);
+        stockLevelExecutor = new StockLevelExecutor(random, connection);
     }
 
     public Future<Terminal> run(long sessionStartNanoTime) {
@@ -71,8 +74,9 @@ public class Terminal {
         (switch (message.body()) {
             case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount++);
             case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute);
+            case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute);
             // TODO complete transactions
-            case "PAYMENT", "STOCK_LEVEL", "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
+            case "PAYMENT", "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(__ -> onTransactionSuccess(transactionStartNanoTime, message.body()))
                 .recover(cause -> {
@@ -92,7 +96,11 @@ public class Terminal {
 
     private void sendNextTransaction() {
         // TODO complete transactions
-        eventBus.send(address, random.nextInt(1, 10) == 1 ? TPCCTransaction.ORDER_STATUS.name() : TPCCTransaction.NEW_ORDER.name());
+        eventBus.send(address, switch (random.nextInt(1, 10)) {
+            case 1 -> TPCCTransaction.ORDER_STATUS.name();
+            case 2 -> TPCCTransaction.STOCK_LEVEL.name();
+            default -> TPCCTransaction.NEW_ORDER.name();
+        });
     }
 
     public void stop() {
