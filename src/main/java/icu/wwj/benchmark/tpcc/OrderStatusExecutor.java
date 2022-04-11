@@ -79,7 +79,7 @@ public class OrderStatusExecutor implements TransactionExecutor {
 
     private Future<OrderStatus> selectCustomer(OrderStatus orderStatus) {
         return stmtOrderStatusSelectCustomer.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id))
-                .compose(rows -> {
+                .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("Customer for C_W_ID=%d C_D_ID=%d C_ID=%d not found".formatted(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id));
                     }
@@ -90,13 +90,13 @@ public class OrderStatusExecutor implements TransactionExecutor {
                         orderStatus.c_last = row.getString("c_last");
                     }
                     orderStatus.c_balance = row.getDouble("c_balance");
-                    return Future.succeededFuture(orderStatus);
+                    return orderStatus;
                 });
     }
 
     private Future<OrderStatus> selectCustomerListByLast(OrderStatus orderStatus) {
         return stmtOrderStatusSelectCustomerListByLast.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.c_last))
-                .compose(rows -> {
+                .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("Customer(s) for C_W_ID=%d C_D_ID=%d C_LAST=%s not found".formatted(orderStatus.w_id, orderStatus.d_id, orderStatus.c_last));
                     }
@@ -105,13 +105,13 @@ public class OrderStatusExecutor implements TransactionExecutor {
                         customerIds.add(row.getInteger("c_id"));
                     }
                     orderStatus.c_id = customerIds.get((customerIds.size() + 1) / 2 - 1);
-                    return Future.succeededFuture(orderStatus);
+                    return orderStatus;
                 });
     }
 
     private Future<OrderStatus> selectLastOrder(OrderStatus orderStatus) {
         return stmtOrderStatusSelectLastOrder.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id))
-                .compose(rows -> {
+                .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("Last Order for W_ID=%d D_ID=%d C_ID=%d not found".formatted(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id));
                     }
@@ -120,13 +120,13 @@ public class OrderStatusExecutor implements TransactionExecutor {
                     orderStatus.o_entry_d = row.getLocalDateTime("o_entry_d");
                     Integer o_carrier_id = row.getInteger("o_carrier_id");
                     orderStatus.o_carrier_id = null == o_carrier_id ? -1 : o_carrier_id;
-                    return Future.succeededFuture(orderStatus);
+                    return orderStatus;
                 });
     }
 
     private Future<Void> selectOrderLine(OrderStatus orderStatus) {
         return stmtOrderStatusSelectOrderLine.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.o_id))
-                .compose(rows -> {
+                .map(rows -> {
                     int ol_idx = 0;
                     for (Row row : rows) {
                         orderStatus.ol_i_id[ol_idx] = row.getInteger("ol_i_id");
@@ -143,7 +143,7 @@ public class OrderStatusExecutor implements TransactionExecutor {
                         orderStatus.ol_amount[ol_idx] = 0.0;
                         orderStatus.ol_delivery_d[ol_idx] = null;
                     }
-                    return Future.<Void>succeededFuture();
+                    return null;
                 });
     }
 }
