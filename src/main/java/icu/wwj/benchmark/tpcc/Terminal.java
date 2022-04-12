@@ -40,6 +40,8 @@ public class Terminal {
 
     private final NewOrderExecutor newOrderExecutor;
 
+    private final PaymentExecutor paymentExecutor;
+
     private final OrderStatusExecutor orderStatusExecutor;
 
     private final StockLevelExecutor stockLevelExecutor;
@@ -53,6 +55,7 @@ public class Terminal {
         consumer = eventBus.localConsumer(address);
         resultProducer = eventBus.sender(ResultRecorder.ADDRESS);
         newOrderExecutor = new NewOrderExecutor(random, connection);
+        paymentExecutor = new PaymentExecutor(random, connection);
         orderStatusExecutor = new OrderStatusExecutor(random, connection);
         stockLevelExecutor = new StockLevelExecutor(random, connection);
     }
@@ -73,10 +76,11 @@ public class Terminal {
         long transactionStartNanoTime = System.nanoTime();
         (switch (message.body()) {
             case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount++);
+            case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute);
             case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute);
             case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute);
             // TODO complete transactions
-            case "PAYMENT", "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
+            case "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(__ -> onTransactionSuccess(transactionStartNanoTime, message.body()))
                 .recover(cause -> {
@@ -97,9 +101,10 @@ public class Terminal {
     private void sendNextTransaction() {
         // TODO complete transactions
         eventBus.send(address, switch (random.nextInt(1, 10)) {
-            case 1 -> TPCCTransaction.ORDER_STATUS.name();
-            case 2 -> TPCCTransaction.STOCK_LEVEL.name();
-            default -> TPCCTransaction.NEW_ORDER.name();
+            case 1, 2, 3, 4 -> TPCCTransaction.NEW_ORDER.name();
+            case 5, 6, 7, 8 -> TPCCTransaction.PAYMENT.name();
+            case 9 -> TPCCTransaction.ORDER_STATUS.name();
+            default -> TPCCTransaction.STOCK_LEVEL.name();
         });
     }
 
