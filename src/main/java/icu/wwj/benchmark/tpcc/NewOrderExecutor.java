@@ -156,18 +156,18 @@ public class NewOrderExecutor implements TransactionExecutor {
         Future<NewOrder> future = Future.succeededFuture(generated);
         return future.compose(newOrder -> stmtNewOrderSelectDist.execute(Tuple.of(newOrder.w_id, newOrder.d_id))
                 // Retrieve the required data from DISTRICT
-                .compose(rows -> {
+                .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("District for W_ID=%d D_ID=%d not found".formatted(newOrder.w_id, newOrder.d_id));
                     }
                     Row row = rows.iterator().next();
                     newOrder.d_tax = row.getDouble("d_tax");
                     newOrder.o_id = row.getInteger("d_next_o_id");
-                    return Future.succeededFuture(newOrder);
+                    return newOrder;
                 })
         ).compose(newOrder -> stmtNewOrderSelectWhseCust.execute(Tuple.of(newOrder.w_id, newOrder.d_id, newOrder.c_id))
                 // Retrieve the required data from CUSTOMER and WAREHOUSE
-                .compose(rows -> {
+                .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("Warehouse or Customer for W_ID=%d D_ID=%d C_ID=%d not found".formatted(newOrder.w_id, newOrder.d_id, newOrder.c_id));
                     }
@@ -176,17 +176,14 @@ public class NewOrderExecutor implements TransactionExecutor {
                     newOrder.c_last = row.getString("c_last");
                     newOrder.c_credit = row.getString("c_credit");
                     newOrder.c_discount = row.getDouble("c_discount");
-                    return Future.succeededFuture(newOrder);
+                    return newOrder;
                 })
-        ).compose(newOrder -> stmtNewOrderUpdateDist.execute(Tuple.of(newOrder.w_id, newOrder.d_id))
+        ).compose(newOrder -> stmtNewOrderUpdateDist.execute(Tuple.of(newOrder.w_id, newOrder.d_id)).map(newOrder)
                 // Update the DISTRICT bumping the D_NEXT_O_ID
-                .compose(__ -> Future.succeededFuture(newOrder))
-        ).compose(newOrder -> stmtNewOrderInsertOrder.execute(Tuple.of(newOrder.o_id, newOrder.d_id, newOrder.w_id, newOrder.c_id, LocalDateTime.now(), newOrder.o_ol_cnt, newOrder.o_all_local))
+        ).compose(newOrder -> stmtNewOrderInsertOrder.execute(Tuple.of(newOrder.o_id, newOrder.d_id, newOrder.w_id, newOrder.c_id, LocalDateTime.now(), newOrder.o_ol_cnt, newOrder.o_all_local)).map(newOrder)
                 // Insert the ORDER row
-                .compose(__ -> Future.succeededFuture(newOrder))
-        ).compose(newOrder -> stmtNewOrderInsertNewOrder.execute(Tuple.of(newOrder.o_id, newOrder.d_id, newOrder.w_id))
+        ).compose(newOrder -> stmtNewOrderInsertNewOrder.execute(Tuple.of(newOrder.o_id, newOrder.d_id, newOrder.w_id)).map(newOrder)
                 // Insert the NEW_ORDER row
-                .compose(__ -> Future.succeededFuture(newOrder))
         ).compose(newOrder -> {
             List<Tuple> orderLineInserts = new ArrayList<>(newOrder.o_ol_cnt);
             List<Tuple> stockUpdates = new ArrayList<>(newOrder.o_ol_cnt);
@@ -217,7 +214,7 @@ public class NewOrderExecutor implements TransactionExecutor {
             newOrder.i_name[seq] = itemRow.getString("i_name");
             newOrder.i_price[seq] = itemRow.getDouble("i_price");
             String i_data = itemRow.getString("i_data");
-            return stmtNewOrderSelectStock.execute(Tuple.of(newOrder.ol_supply_w_id[seq], newOrder.ol_i_id[seq])).compose(stockRows -> {
+            return stmtNewOrderSelectStock.execute(Tuple.of(newOrder.ol_supply_w_id[seq], newOrder.ol_i_id[seq])).map(stockRows -> {
                 if (0 == stockRows.size()) {
                     throw new IllegalStateException("STOCK with S_W_ID=%d S_I_ID=%d not fount".formatted(newOrder.ol_supply_w_id[seq], newOrder.ol_i_id[seq]));
                 }
@@ -243,7 +240,7 @@ public class NewOrderExecutor implements TransactionExecutor {
                         newOrder.ol_amount[seq],
                         stockRow.getString(newOrder.d_id < 10 ? "s_dist_0" + newOrder.d_id : "s_dist_10")
                 ));
-                return Future.succeededFuture();
+                return null;
             });
         });
     }
