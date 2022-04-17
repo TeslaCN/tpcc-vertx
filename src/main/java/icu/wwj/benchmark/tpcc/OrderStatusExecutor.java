@@ -12,7 +12,7 @@ import io.vertx.sqlclient.Tuple;
 import java.util.ArrayList;
 import java.util.List;
 
-public class OrderStatusExecutor implements TransactionExecutor {
+public class OrderStatusExecutor implements TransactionExecutor<Void> {
 
     private final jTPCCRandom random;
 

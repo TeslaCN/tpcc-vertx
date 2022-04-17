@@ -9,7 +9,7 @@ import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Transaction;
 import io.vertx.sqlclient.Tuple;
 
-public class StockLevelExecutor implements TransactionExecutor {
+public class StockLevelExecutor implements TransactionExecutor<Void> {
 
     private final jTPCCRandom random;
 

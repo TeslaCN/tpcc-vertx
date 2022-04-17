@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-public class NewOrderExecutor implements TransactionExecutor {
+public class NewOrderExecutor implements TransactionExecutor<Boolean> {
 
     private final jTPCCRandom random;
 
@@ -117,7 +117,7 @@ public class NewOrderExecutor implements TransactionExecutor {
     }
 
     @Override
-    public Future<Void> execute(Transaction transaction) {
+    public Future<Boolean> execute(Transaction transaction) {
         NewOrder generated = generateNewOrder();
         // The o_entry_d is now.
         generated.o_entry_d = LocalDateTime.now();
@@ -197,9 +197,9 @@ public class NewOrderExecutor implements TransactionExecutor {
             return orderLineFuture
                     .eventually(__ -> stockUpdates.isEmpty() ? Future.succeededFuture() : stmtNewOrderUpdateStock.executeBatch(stockUpdates))
                     .eventually(__ -> orderLineInserts.isEmpty() ? Future.succeededFuture() : stmtNewOrderInsertOrderLine.executeBatch(orderLineInserts))
-                    .compose(__ -> transaction.commit(),
+                    .compose(__ -> transaction.commit().map(false),
                             cause -> transaction.rollback()
-                                    .compose(unused -> ItemInvalidException.INSTANCE == cause ? Future.succeededFuture() : Future.failedFuture(cause)));
+                                    .compose(unused -> ItemInvalidException.INSTANCE == cause ? Future.succeededFuture(true) : Future.failedFuture(cause)));
         });
     }
 

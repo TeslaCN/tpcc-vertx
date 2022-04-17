@@ -11,7 +11,7 @@ import io.vertx.sqlclient.Tuple;
 
 import java.time.LocalDateTime;
 
-public class PaymentExecutor implements TransactionExecutor {
+public class PaymentExecutor implements TransactionExecutor<Void> {
 
     private final jTPCCRandom random;
 

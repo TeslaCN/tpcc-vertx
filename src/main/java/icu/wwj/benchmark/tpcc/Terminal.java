@@ -76,13 +76,13 @@ public class Terminal {
         long transactionStartNanoTime = System.nanoTime();
         (switch (message.body()) {
             case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount++);
-            case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute);
-            case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute);
-            case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute);
+            case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute).map(false);
+            case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute).map(false);
+            case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute).map(false);
             // TODO complete transactions
             case "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
             default -> Future.failedFuture("Unknown transaction type");
-        }).onSuccess(__ -> onTransactionSuccess(transactionStartNanoTime, message.body()))
+        }).onSuccess(rollback -> onTransactionSuccess(transactionStartNanoTime, message.body(), (boolean) rollback))
                 .recover(cause -> {
                     LOGGER.error("Error occurred running " + message.body(), cause);
                     return Future.succeededFuture();
@@ -90,12 +90,12 @@ public class Terminal {
                 .onSuccess(__ -> sendNextTransaction());
     }
 
-    private void onTransactionSuccess(long transactionStartNanoTime, String transactionType) {
+    private void onTransactionSuccess(long transactionStartNanoTime, String transactionType, boolean rollback) {
         totalCount++;
         long transactionFinishNanoTime = System.nanoTime();
         long elapsedMillis = (transactionFinishNanoTime - sessionStartNanoTime) / 1_000_000;
         long transactionTookMillis = (transactionFinishNanoTime - transactionStartNanoTime) / 1_000_000;
-        resultProducer.write("0," + elapsedMillis + "," + transactionTookMillis + "," + transactionTookMillis + "," + transactionType + ",0,0,0");
+        resultProducer.write("0," + elapsedMillis + "," + transactionTookMillis + "," + transactionTookMillis + "," + transactionType + "," + (rollback ? "1" : "0") + ",0,0");
     }
 
     private void sendNextTransaction() {
