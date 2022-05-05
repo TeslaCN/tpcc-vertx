@@ -46,6 +46,8 @@ public class Terminal {
 
     private final StockLevelExecutor stockLevelExecutor;
 
+    private final DeliveryExecutor deliveryExecutor;
+
     public Terminal(int id, EventBus eventBus, SqlConnection connection) {
         this.id = id;
         this.random = new jTPCCRandom();
@@ -58,6 +60,7 @@ public class Terminal {
         paymentExecutor = new PaymentExecutor(random, connection);
         orderStatusExecutor = new OrderStatusExecutor(random, connection);
         stockLevelExecutor = new StockLevelExecutor(random, connection);
+        deliveryExecutor = new DeliveryExecutor(random, connection);
     }
 
     public Future<Terminal> run(long sessionStartNanoTime) {
@@ -79,8 +82,8 @@ public class Terminal {
             case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute).map(false);
             case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute).map(false);
             case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute).map(false);
-            // TODO complete transactions
-            case "DELIVERY" -> Future.failedFuture(new UnsupportedOperationException());
+            // TODO Transaction delivery which is required to execute in background is executed immediately at present
+            case "DELIVERY" -> connection.begin().compose(deliveryExecutor::execute).map(false);
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(rollback -> onTransactionSuccess(transactionStartNanoTime, message.body(), (boolean) rollback))
                 .recover(cause -> {
@@ -100,18 +103,19 @@ public class Terminal {
 
     private void sendNextTransaction() {
         // TODO complete transactions
-        eventBus.send(address, switch (random.nextInt(1, 10)) {
+        eventBus.send(address, switch (random.nextInt(0, 10)) {
             case 1, 2, 3, 4 -> TPCCTransaction.NEW_ORDER.name();
             case 5, 6, 7, 8 -> TPCCTransaction.PAYMENT.name();
             case 9 -> TPCCTransaction.ORDER_STATUS.name();
-            default -> TPCCTransaction.STOCK_LEVEL.name();
+            case 10 -> TPCCTransaction.STOCK_LEVEL.name();
+            default -> TPCCTransaction.DELIVERY.name();
         });
     }
 
     public void stop() {
         stop = true;
     }
-    
+
     public int getNewOrderCount() {
         return newOrderCount;
     }
