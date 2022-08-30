@@ -1,16 +1,18 @@
 package icu.wwj.benchmark.tpcc;
 
+import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.eventbus.MessageProducer;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.SqlConnection;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Terminal {
+public class Terminal extends AbstractVerticle {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(Terminal.class);
 
@@ -18,62 +20,77 @@ public class Terminal {
 
     private final jTPCCRandom random;
 
-    private final EventBus eventBus;
+    private final Pool pool;
 
-    private final SqlConnection connection;
+    private SqlConnection connection;
 
     private final String address;
 
-    private final MessageConsumer<String> consumer;
-
     private volatile long sessionStartNanoTime;
 
-    private volatile boolean stop;
+    private MessageConsumer<String> transactionConsumer;
 
-    private final Promise<Terminal> stopPromise = Promise.promise();
+    private MessageProducer<String> resultProducer;
 
-    private int newOrderCount;
+    private NewOrderExecutor newOrderExecutor;
 
-    private int totalCount;
+    private PaymentExecutor paymentExecutor;
 
-    private final MessageProducer<String> resultProducer;
+    private OrderStatusExecutor orderStatusExecutor;
 
-    private final NewOrderExecutor newOrderExecutor;
+    private StockLevelExecutor stockLevelExecutor;
 
-    private final PaymentExecutor paymentExecutor;
+    private DeliveryExecutor deliveryExecutor;
 
-    private final OrderStatusExecutor orderStatusExecutor;
+    @Getter
+    private long newOrderCount;
 
-    private final StockLevelExecutor stockLevelExecutor;
+    @Getter
+    private long totalCount;
 
-    private final DeliveryExecutor deliveryExecutor;
+    private boolean stop;
 
-    public Terminal(int id, EventBus eventBus, SqlConnection connection) {
+    private Promise<Void> stopPromise;
+
+    public Terminal(int id, Pool pool) {
         this.id = id;
-        this.random = new jTPCCRandom();
-        this.connection = connection;
-        this.eventBus = eventBus;
+        random = new jTPCCRandom();
+        this.pool = pool;
         address = "Terminal-" + id;
-        consumer = eventBus.localConsumer(address);
-        resultProducer = eventBus.sender(ResultRecorder.ADDRESS);
+    }
+
+    @Override
+    public void start(Promise<Void> startPromise) {
+        pool.getConnection().onSuccess(this::init).onSuccess(__ -> startPromise.complete());
+    }
+    
+    private void init(SqlConnection sqlConnection) {
+        connection = sqlConnection;
         newOrderExecutor = new NewOrderExecutor(random, connection);
         paymentExecutor = new PaymentExecutor(random, connection);
         orderStatusExecutor = new OrderStatusExecutor(random, connection);
         stockLevelExecutor = new StockLevelExecutor(random, connection);
         deliveryExecutor = new DeliveryExecutor(random, connection);
+        transactionConsumer = getVertx().eventBus().localConsumer(address);
+        resultProducer = getVertx().eventBus().sender(ResultRecorder.ADDRESS);
+        MessageConsumer<Long> startConsumer = getVertx().eventBus().localConsumer("start");
+        startConsumer.handler(msg -> {
+            startExecutingTransactions(msg.body());
+            startConsumer.unregister();
+        });
     }
 
-    public Future<Terminal> run(long sessionStartNanoTime) {
-        LOGGER.info("Terminal-{} started.", id);
-        consumer.handler(this::handleTPCCTransaction);
+    public void startExecutingTransactions(long sessionStartNanoTime) {
+        transactionConsumer.handler(this::handleTPCCTransaction);
         this.sessionStartNanoTime = sessionStartNanoTime;
+        LOGGER.info("Terminal-{} started.", id);
         sendNextTransaction();
-        return stopPromise.future();
     }
 
     private void handleTPCCTransaction(Message<String> message) {
         if (stop) {
-            stopPromise.complete(this);
+            getVertx().eventBus().publish(TerminalResult.class.getSimpleName(), new TerminalResult(totalCount, newOrderCount));
+            stopPromise.complete();
             return;
         }
         long transactionStartNanoTime = System.nanoTime();
@@ -103,7 +120,7 @@ public class Terminal {
 
     private void sendNextTransaction() {
         // TODO complete transactions
-        eventBus.send(address, switch (random.nextInt(0, 10)) {
+        getVertx().eventBus().send(address, switch (random.nextInt(0, 10)) {
             case 1, 2, 3, 4 -> TPCCTransaction.NEW_ORDER.name();
             case 5, 6, 7, 8 -> TPCCTransaction.PAYMENT.name();
             case 9 -> TPCCTransaction.ORDER_STATUS.name();
@@ -112,15 +129,9 @@ public class Terminal {
         });
     }
 
-    public void stop() {
+    @Override
+    public void stop(Promise<Void> stopPromise) {
+        this.stopPromise = stopPromise;
         stop = true;
-    }
-
-    public int getNewOrderCount() {
-        return newOrderCount;
-    }
-
-    public int getTotalCount() {
-        return totalCount;
     }
 }

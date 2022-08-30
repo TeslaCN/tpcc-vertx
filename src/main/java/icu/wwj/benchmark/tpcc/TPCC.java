@@ -1,8 +1,9 @@
 package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.Configurations;
-import io.vertx.core.CompositeFuture;
+import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.pgclient.PgConnectOptions;
@@ -14,29 +15,22 @@ import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class TPCC {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TPCC.class);
 
-    private final Vertx vertx = Vertx.vertx(new VertxOptions()
-            .setPreferNativeTransport(true)
-            .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
-            // We use the worker pool only when writing result to file.
-            .setWorkerPoolSize(1)
-    );
+    private final Vertx vertx;
 
     private final Pool pool;
 
     private final ResultRecorder resultRecorder;
 
-    private final Terminal[] terminals = new Terminal[Configurations.TERMINALS];
-
-    public TPCC() {
+    public TPCC(Vertx vertx) {
+        this.vertx = vertx;
         vertx.exceptionHandler(cause -> LOGGER.error("Unhandled exception", cause));
         pool = PgPool.pool(vertx, new PgConnectOptions().setCachePreparedStatements(true)
                 .setHost("127.0.0.1")
@@ -46,47 +40,46 @@ public final class TPCC {
         resultRecorder = new ResultRecorder(vertx, "/tmp/tpcc_result_" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()) + ".csv");
     }
 
-    @SuppressWarnings("rawtypes")
     public Future<Void> run() {
         LOGGER.info("Starting TPC-C.");
-        List<Future> futures = new ArrayList<>(terminals.length);
-        for (int i = 0; i < terminals.length; i++) {
-            int finalI = i;
-            futures.add(pool.getConnection().compose(connection -> {
-                Terminal terminal = new Terminal(finalI, vertx.eventBus(), connection);
-                terminals[finalI] = terminal;
-                return Future.succeededFuture(terminal);
-            }));
-        }
-        return CompositeFuture.all(futures)
+        AtomicInteger idGenerator = new AtomicInteger();
+        return vertx.deployVerticle(() -> new Terminal(idGenerator.incrementAndGet(), pool), new DeploymentOptions().setInstances(Configurations.TERMINALS))
                 .compose(this::onTerminalsReady)
                 .onFailure(cause -> LOGGER.error("Failed to start terminals, caused by:", cause))
-                .eventually(__ -> resultRecorder.close())
-                .eventually(__ -> vertx.close());
+                .eventually(__ -> resultRecorder.close());
     }
 
-    @SuppressWarnings("rawtypes")
-    public Future<Void> onTerminalsReady(CompositeFuture succeeded) {
+    public Future<Void> onTerminalsReady(String deploymentId) {
         LOGGER.info("Starting terminals.");
-        List<Terminal> terminals = succeeded.list();
         long sessionStartNanoTime = System.nanoTime();
-        List<Future> futures = terminals.stream().map(terminal -> terminal.run(sessionStartNanoTime)).collect(Collectors.toList());
-        LOGGER.info("All terminals started.");
+        vertx.eventBus().publish("start", sessionStartNanoTime);
+        Promise<Void> promise = Promise.promise();
+        AtomicLong newOrderCount = new AtomicLong(), totalCount = new AtomicLong();
+        AtomicInteger remainTerminals = new AtomicInteger(Configurations.TERMINALS);
         vertx.setTimer(TimeUnit.SECONDS.toMillis(Configurations.SECONDS), event -> {
             LOGGER.info("Stopping terminals.");
-            for (Terminal each : terminals) {
-                each.stop();
-            }
+            vertx.eventBus().<TerminalResult>localConsumer(TerminalResult.class.getSimpleName(), msg -> {
+                newOrderCount.addAndGet(msg.body().getNewOrderCount());
+                totalCount.addAndGet(msg.body().getTotalCount());
+                if (0 == remainTerminals.decrementAndGet()) {
+                    promise.complete();
+                }
+            });
+            vertx.undeploy(deploymentId).onFailure(cause -> LOGGER.error("Error occurred:", cause));
         });
-        return CompositeFuture.all(futures)
-                .onSuccess(compositeFuture -> LOGGER.info("Total: {}", compositeFuture.<Terminal>list().stream().mapToInt(Terminal::getTotalCount).sum()))
-                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", compositeFuture.<Terminal>list().stream().mapToInt(Terminal::getNewOrderCount).sum()))
-                .onFailure(cause -> LOGGER.error("Error occurred:", cause))
-                .compose(__ -> Future.succeededFuture());
+        return promise.future()
+                .onSuccess(compositeFuture -> LOGGER.info("Total: {}", totalCount.get()))
+                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", newOrderCount.get()));
     }
 
     public static void main(String[] args) {
-        Future<Void> start = new TPCC().run();
-        start.onSuccess(__ -> LOGGER.info("Succeeded"));
+        Vertx vertx = Vertx.vertx(new VertxOptions()
+                .setPreferNativeTransport(true)
+                .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
+                // We use the worker pool only when writing result to file.
+                .setWorkerPoolSize(1)
+        );
+        Future<Void> start = new TPCC(vertx).run();
+        start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
     }
 }
