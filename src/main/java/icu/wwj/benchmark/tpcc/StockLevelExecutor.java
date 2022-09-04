@@ -1,6 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
-import icu.wwj.benchmark.tpcc.config.Configurations;
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -10,12 +10,15 @@ import io.vertx.sqlclient.Transaction;
 import io.vertx.sqlclient.Tuple;
 
 public class StockLevelExecutor implements TransactionExecutor<Void> {
+    
+    private final BenchmarkConfiguration configuration;
 
     private final jTPCCRandom random;
 
     private final PreparedQuery<RowSet<Row>> stmtStockLevelSelectLow;
 
-    public StockLevelExecutor(jTPCCRandom random, SqlConnection connection) {
+    public StockLevelExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
+        this.configuration = configuration;
         this.random = random;
         stmtStockLevelSelectLow = connection.preparedQuery(
                 "SELECT count(*) AS low_stock FROM (" +
@@ -46,6 +49,6 @@ public class StockLevelExecutor implements TransactionExecutor<Void> {
     }
 
     private StockLevel generateStockLevel() {
-        return new StockLevel(random.nextInt(1, Configurations.WAREHOUSES), random.nextInt(1, 10), random.nextInt(10, 20));
+        return new StockLevel(random.nextInt(1, configuration.getWarehouses()), random.nextInt(1, 10), random.nextInt(10, 20));
     }
 }

@@ -1,5 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -9,12 +10,14 @@ import io.vertx.core.eventbus.MessageProducer;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.SqlConnection;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class Terminal extends AbstractVerticle {
-
-    private final static Logger LOGGER = LoggerFactory.getLogger(Terminal.class);
+    
+    private final BenchmarkConfiguration configuration;
 
     private final int id;
 
@@ -52,7 +55,8 @@ public class Terminal extends AbstractVerticle {
 
     private Promise<Void> stopPromise;
 
-    public Terminal(int id, Pool pool) {
+    public Terminal(BenchmarkConfiguration configuration, int id, Pool pool) {
+        this.configuration = configuration;
         this.id = id;
         random = new jTPCCRandom();
         this.pool = pool;
@@ -61,16 +65,16 @@ public class Terminal extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) {
-        pool.getConnection().onSuccess(this::init).onSuccess(__ -> startPromise.complete());
+        pool.getConnection().onSuccess(this::init).onSuccess(__ -> startPromise.complete()).onFailure(cause -> log.error(cause.getMessage(), cause));
     }
     
     private void init(SqlConnection sqlConnection) {
         connection = sqlConnection;
-        newOrderExecutor = new NewOrderExecutor(random, connection);
-        paymentExecutor = new PaymentExecutor(random, connection);
-        orderStatusExecutor = new OrderStatusExecutor(random, connection);
-        stockLevelExecutor = new StockLevelExecutor(random, connection);
-        deliveryExecutor = new DeliveryExecutor(random, connection);
+        newOrderExecutor = new NewOrderExecutor(configuration, random, connection);
+        paymentExecutor = new PaymentExecutor(configuration, random, connection);
+        orderStatusExecutor = new OrderStatusExecutor(configuration, random, connection);
+        stockLevelExecutor = new StockLevelExecutor(configuration, random, connection);
+        deliveryExecutor = new DeliveryExecutor(configuration, random, connection);
         transactionConsumer = getVertx().eventBus().localConsumer(address);
         resultProducer = getVertx().eventBus().sender(ResultRecorder.ADDRESS);
         MessageConsumer<Long> startConsumer = getVertx().eventBus().localConsumer("start");
@@ -83,7 +87,7 @@ public class Terminal extends AbstractVerticle {
     public void startExecutingTransactions(long sessionStartNanoTime) {
         transactionConsumer.handler(this::handleTPCCTransaction);
         this.sessionStartNanoTime = sessionStartNanoTime;
-        LOGGER.info("Terminal-{} started.", id);
+        log.info("Terminal-{} started.", id);
         sendNextTransaction();
     }
 
@@ -104,7 +108,7 @@ public class Terminal extends AbstractVerticle {
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(rollback -> onTransactionSuccess(transactionStartNanoTime, message.body(), (boolean) rollback))
                 .recover(cause -> {
-                    LOGGER.error("Error occurred running " + message.body(), cause);
+                    log.error("Error occurred running " + message.body(), cause);
                     return Future.succeededFuture();
                 })
                 .onSuccess(__ -> sendNextTransaction());

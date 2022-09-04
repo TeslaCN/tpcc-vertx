@@ -1,6 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
-import icu.wwj.benchmark.tpcc.config.Configurations;
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NewOrderExecutor implements TransactionExecutor<Boolean> {
+    
+    private final BenchmarkConfiguration configuration;
 
     private final jTPCCRandom random;
 
@@ -35,7 +37,8 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
 
     public PreparedQuery<RowSet<Row>> stmtNewOrderInsertOrderLine;
 
-    public NewOrderExecutor(jTPCCRandom random, SqlConnection connection) {
+    public NewOrderExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
+        this.configuration = configuration;
         this.random = random;
         stmtNewOrderSelectWhseCust = connection.preparedQuery(
                 "SELECT c_discount, c_last, c_credit, w_tax " +
@@ -85,7 +88,7 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
     }
 
     private NewOrder generateNewOrder() {
-        int warehouse = random.nextInt(1, Configurations.WAREHOUSES);
+        int warehouse = random.nextInt(1, configuration.getWarehouses());
         NewOrder newOrder = new NewOrder(warehouse, random.nextInt(1, 10), random.getCustomerID());
         int i = 0;
         // 2.4.1.3
@@ -96,7 +99,7 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
             if (random.nextInt(1, 100) <= 99) {
                 newOrder.ol_supply_w_id[i] = warehouse;
             } else {
-                int randomWarehouse = random.nextInt(1, Configurations.WAREHOUSES);
+                int randomWarehouse = random.nextInt(1, configuration.getWarehouses());
                 newOrder.ol_supply_w_id[i] = randomWarehouse;
                 if (randomWarehouse != warehouse) {
                     newOrder.o_all_local = 0;

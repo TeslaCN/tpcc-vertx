@@ -1,0 +1,14 @@
+conn=postgresql://postgres:postgres@127.0.0.1:5432/bmsql?cachePreparedStatements=true&preparedStatementCacheMaxSize=256
+poolConfig={"maxSize":32}
+warehouses=32
+terminalWarehouseFixed=true
+terminals=32
+runSeconds=10
+
+//The following five values must add up to 100
+//The default percentages of 45, 43, 4, 4 & 4 match the TPC-C spec
+newOrderWeight=45
+paymentWeight=43
+orderStatusWeight=4
+deliveryWeight=4
+stockLevelWeight=4

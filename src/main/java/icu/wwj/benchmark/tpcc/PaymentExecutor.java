@@ -1,6 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
-import icu.wwj.benchmark.tpcc.config.Configurations;
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -12,7 +12,9 @@ import io.vertx.sqlclient.Tuple;
 import java.time.LocalDateTime;
 
 public class PaymentExecutor implements TransactionExecutor<Void> {
-
+    
+    private final BenchmarkConfiguration configuration;
+    
     private final jTPCCRandom random;
 
     public final PreparedQuery<RowSet<Row>> stmtPaymentSelectWarehouse;
@@ -35,7 +37,8 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
 
     public final PreparedQuery<RowSet<Row>> stmtPaymentInsertHistory;
 
-    public PaymentExecutor(jTPCCRandom random, SqlConnection connection) {
+    public PaymentExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
+        this.configuration = configuration;
         this.random = random;
         stmtPaymentSelectWarehouse = connection.preparedQuery(
                 "SELECT w_name, w_street_1, w_street_2, w_city, " +
@@ -209,13 +212,13 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
 
     private Payment generatePayment() {
         // 2.5.1.1 & 2.5.1.2
-        Payment payment = new Payment(random.nextInt(1, Configurations.WAREHOUSES), random.nextInt(1, 10));
+        Payment payment = new Payment(random.nextInt(1, configuration.getWarehouses()), random.nextInt(1, 10));
         payment.c_w_id = payment.w_id;
         payment.c_d_id = payment.d_id;
         if (random.nextInt(1, 100) > 85) {
             payment.c_d_id = random.nextInt(1, 10);
-            while (payment.c_w_id == payment.w_id && Configurations.WAREHOUSES > 1) {
-                payment.c_w_id = random.nextInt(1, Configurations.WAREHOUSES);
+            while (payment.c_w_id == payment.w_id && configuration.getWarehouses() > 1) {
+                payment.c_w_id = random.nextInt(1, configuration.getWarehouses());
             }
         }
         if (random.nextInt(1, 100) <= 60) {

@@ -1,6 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
-import icu.wwj.benchmark.tpcc.config.Configurations;
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class OrderStatusExecutor implements TransactionExecutor<Void> {
+    
+    private final BenchmarkConfiguration configuration;
 
     private final jTPCCRandom random;
 
@@ -24,7 +26,8 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
 
     private final PreparedQuery<RowSet<Row>> stmtOrderStatusSelectOrderLine;
 
-    public OrderStatusExecutor(jTPCCRandom random, SqlConnection connection) {
+    public OrderStatusExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
+        this.configuration = configuration;
         this.random = random;
         stmtOrderStatusSelectCustomerListByLast = connection.preparedQuery(
                 "SELECT c_id " +
@@ -53,7 +56,7 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
     }
 
     private OrderStatus generateOrderStatus() {
-        OrderStatus orderStatus = new OrderStatus(random.nextInt(1, Configurations.WAREHOUSES), random.nextInt(1, 10));
+        OrderStatus orderStatus = new OrderStatus(random.nextInt(1, configuration.getWarehouses()), random.nextInt(1, 10));
         if (random.nextInt(1, 100) <= 60) {
             orderStatus.c_id = 0;
             orderStatus.c_last = random.getCLast();

@@ -1,6 +1,6 @@
 package icu.wwj.benchmark.tpcc;
 
-import icu.wwj.benchmark.tpcc.config.Configurations;
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 public class DeliveryExecutor implements TransactionExecutor<Void> {
+    
+    private final BenchmarkConfiguration configuration;
 
     private final jTPCCRandom random;
 
@@ -30,7 +32,8 @@ public class DeliveryExecutor implements TransactionExecutor<Void> {
 
     private final PreparedQuery<RowSet<Row>> stmtDeliveryBGUpdateCustomer;
 
-    public DeliveryExecutor(jTPCCRandom random, SqlConnection connection) {
+    public DeliveryExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
+        this.configuration = configuration;
         this.random = random;
         stmtDeliveryBGSelectOldestNewOrder = connection.preparedQuery(
                 "SELECT no_o_id " +
@@ -81,7 +84,7 @@ public class DeliveryExecutor implements TransactionExecutor<Void> {
     }
 
     private Delivery generateDelivery() {
-        int warehouse = random.nextInt(1, Configurations.WAREHOUSES);
+        int warehouse = random.nextInt(1, configuration.getWarehouses());
         Delivery delivery = new Delivery(warehouse);
         delivery.ol_delivery_d = LocalDateTime.now();
         delivery.o_carrier_id = random.nextInt(1, 10);
