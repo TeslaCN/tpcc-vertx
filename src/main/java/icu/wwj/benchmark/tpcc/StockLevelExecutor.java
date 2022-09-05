@@ -31,7 +31,7 @@ public class StockLevelExecutor implements TransactionExecutor<Void> {
                         "                 AND ol_d_id = d_id " +
                         "                 AND ol_o_id >= d_next_o_id - 20 " +
                         "                 AND ol_o_id < d_next_o_id " +
-                        "                WHERE d_w_id = $1 AND d_id = $3 " +
+                        "                WHERE d_w_id = $3 AND d_id = $4 " +
                         "        ) " +
                         "    ) AS L");
     }
@@ -39,7 +39,7 @@ public class StockLevelExecutor implements TransactionExecutor<Void> {
     @Override
     public Future<Void> execute(Transaction transaction) {
         StockLevel stockLevel = generateStockLevel();
-        return stmtStockLevelSelectLow.execute(Tuple.of(stockLevel.w_id, stockLevel.threshold, stockLevel.d_id)).compose(rows -> {
+        return stmtStockLevelSelectLow.execute(Tuple.of(stockLevel.w_id, stockLevel.threshold, stockLevel.w_id, stockLevel.d_id)).compose(rows -> {
             if (0 == rows.size()) {
                 throw new IllegalStateException("Failed to get low-stock for W_ID=%d D_ID=%d".formatted(stockLevel.w_id, stockLevel.d_id));
             }

@@ -45,7 +45,7 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
                         "      AND o_id = (" +
                         "          SELECT max(o_id) " +
                         "              FROM bmsql_oorder " +
-                        "              WHERE o_w_id = $1 AND o_d_id = $2 AND o_c_id = $3" +
+                        "              WHERE o_w_id = $4 AND o_d_id = $5 AND o_c_id = $6" +
                         "          )");
         stmtOrderStatusSelectOrderLine = connection.preparedQuery(
                 "SELECT ol_i_id, ol_supply_w_id, ol_quantity, " +
@@ -113,7 +113,7 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
     }
 
     private Future<OrderStatus> selectLastOrder(OrderStatus orderStatus) {
-        return stmtOrderStatusSelectLastOrder.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id))
+        return stmtOrderStatusSelectLastOrder.execute(Tuple.of(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id, orderStatus.w_id, orderStatus.d_id, orderStatus.c_id))
                 .map(rows -> {
                     if (0 == rows.size()) {
                         throw new IllegalStateException("Last Order for W_ID=%d D_ID=%d C_ID=%d not found".formatted(orderStatus.w_id, orderStatus.d_id, orderStatus.c_id));

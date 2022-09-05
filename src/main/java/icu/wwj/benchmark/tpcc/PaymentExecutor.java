@@ -77,16 +77,16 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
         stmtPaymentUpdateCustomer = connection.preparedQuery(
                 "UPDATE bmsql_customer " +
                         "    SET c_balance = c_balance - $1, " +
-                        "        c_ytd_payment = c_ytd_payment + $1, " +
+                        "        c_ytd_payment = c_ytd_payment + $2, " +
                         "        c_payment_cnt = c_payment_cnt + 1 " +
-                        "    WHERE c_w_id = $2 AND c_d_id = $3 AND c_id = $4");
+                        "    WHERE c_w_id = $3 AND c_d_id = $4 AND c_id = $5");
         stmtPaymentUpdateCustomerWithData = connection.preparedQuery(
                 "UPDATE bmsql_customer " +
                         "    SET c_balance = c_balance - $1, " +
-                        "        c_ytd_payment = c_ytd_payment + $1, " +
+                        "        c_ytd_payment = c_ytd_payment + $2, " +
                         "        c_payment_cnt = c_payment_cnt + 1, " +
-                        "        c_data = $2 " +
-                        "    WHERE c_w_id = $3 AND c_d_id = $4 AND c_id = $5");
+                        "        c_data = $3 " +
+                        "    WHERE c_w_id = $4 AND c_d_id = $5 AND c_id = $6");
         stmtPaymentInsertHistory = connection.preparedQuery(
                 "INSERT INTO bmsql_history (" +
                         "    h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, " +
@@ -177,7 +177,7 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
         ).compose(payment -> {
             if (payment.c_credit.equals("GC")) {
                 // Customer with good credit, don't update C_DATA.
-                return stmtPaymentUpdateCustomer.execute(Tuple.of(payment.h_amount, payment.c_w_id, payment.c_d_id, payment.c_id)).map(payment);
+                return stmtPaymentUpdateCustomer.execute(Tuple.of(payment.h_amount, payment.h_amount, payment.c_w_id, payment.c_d_id, payment.c_id)).map(payment);
             }
             // Customer with bad credit, need to do the C_DATA work.
             return stmtPaymentSelectCustomerData.execute(Tuple.of(payment.c_w_id, payment.c_d_id, payment.c_id))
@@ -195,7 +195,7 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
                             newData.setLength(500);
                         }
                         payment.c_data = newData.toString();
-                        return stmtPaymentUpdateCustomerWithData.execute(Tuple.of(payment.h_amount, payment.c_data, payment.c_w_id, payment.c_d_id, payment.c_id)).map(payment);
+                        return stmtPaymentUpdateCustomerWithData.execute(Tuple.of(payment.h_amount, payment.h_amount, payment.c_data, payment.c_w_id, payment.c_d_id, payment.c_id)).map(payment);
                     });
         }).compose(payment -> stmtPaymentInsertHistory.execute(Tuple.of(
                 // Insert the HISTORY row.
