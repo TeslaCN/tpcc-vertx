@@ -6,10 +6,7 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.pgclient.PgConnectOptions;
-import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.SqlConnectOptions;
@@ -79,16 +76,11 @@ public final class TPCC {
     }
     
     public static void main(String[] args) throws IOException {
-        Vertx vertx = Vertx.vertx(new VertxOptions()
-                .setPreferNativeTransport(true)
-                .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
-                // We use the worker pool only when writing result to file.
-                .setWorkerPoolSize(1)
-        );
         Properties props = new Properties();
         props.load(new FileInputStream(Paths.get(System.getProperty("props", "props.template")).toFile()));
         BenchmarkConfiguration configuration = new BenchmarkConfiguration(props);
-        Pool pool = Pool.pool(vertx, SqlConnectOptions.fromUri(configuration.getConn()), new PoolOptions(new JsonObject(configuration.getPoolConfig())).setMaxWaitQueueSize(0));
+        Vertx vertx = Vertx.vertx(new VertxOptions(new JsonObject(configuration.getVertxOptions())));
+        Pool pool = Pool.pool(vertx, SqlConnectOptions.fromUri(configuration.getConn()), new PoolOptions(new JsonObject(configuration.getPoolOptions())));
         Future<Void> start = new TPCC(configuration, vertx, pool).run();
         start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
     }
