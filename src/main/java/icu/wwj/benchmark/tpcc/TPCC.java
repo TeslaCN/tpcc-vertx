@@ -12,6 +12,7 @@ import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.SqlConnectOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,7 +88,7 @@ public final class TPCC {
         Properties props = new Properties();
         props.load(new FileInputStream(Paths.get(System.getProperty("props", "props.template")).toFile()));
         BenchmarkConfiguration configuration = new BenchmarkConfiguration(props);
-        Pool pool = PgPool.pool(vertx, PgConnectOptions.fromUri(configuration.getConn()), new PoolOptions(new JsonObject(configuration.getPoolConfig())).setMaxWaitQueueSize(0));
+        Pool pool = Pool.pool(vertx, SqlConnectOptions.fromUri(configuration.getConn()), new PoolOptions(new JsonObject(configuration.getPoolConfig())).setMaxWaitQueueSize(0));
         Future<Void> start = new TPCC(configuration, vertx, pool).run();
         start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
     }
