@@ -36,6 +36,8 @@ public final class TPCC {
     
     private final ResultFileWriter resultFileWriter;
     
+    private long sessionStartNanoTime;
+    
     public TPCC(BenchmarkConfiguration configuration, Vertx vertx, Pool pool) {
         this.configuration = configuration;
         this.vertx = vertx;
@@ -56,13 +58,16 @@ public final class TPCC {
 
     public Future<Void> onTerminalsReady(String deploymentId) {
         LOGGER.info("Starting terminals.");
-        long sessionStartNanoTime = System.nanoTime();
+        sessionStartNanoTime = System.nanoTime();
         vertx.eventBus().publish("start", sessionStartNanoTime);
         Promise<Void> promise = Promise.promise();
         vertx.setTimer(TimeUnit.SECONDS.toMillis(configuration.getRunSeconds()), event -> {
             LOGGER.info("Stopping terminals.");
             vertx.undeploy(deploymentId).onSuccess(__ -> promise.complete()).onFailure(cause -> LOGGER.error("Error occurred:", cause));
         });
+        if (configuration.getReportIntervalSeconds() > 0) {
+            vertx.setPeriodic(configuration.getReportIntervalSeconds() * 1000L, __ -> reportCurrentTPM());
+        }
         return promise.future()
                 .onSuccess(compositeFuture -> LOGGER.info("Total: {}", resultReporter.sumTotalCount()))
                 .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", resultReporter.sumNewOrderCount()));
@@ -78,5 +83,13 @@ public final class TPCC {
         Pool pool = Pool.pool(vertx, connectOptions, new PoolOptions(new JsonObject(configuration.getPoolOptions())));
         Future<Void> start = new TPCC(configuration, vertx, pool).run();
         start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
+    }
+
+    private void reportCurrentTPM() {
+        long currentNanoTime = System.nanoTime();
+        long elapsedNanoTime = (currentNanoTime - sessionStartNanoTime) / 1000000;
+        double tpmC = (double) (100 * 60 * 1000 * resultReporter.sumNewOrderCount() / elapsedNanoTime) / 100.0;
+        double tpmTotal = (double) (100 * 60 * 1000 * resultReporter.sumTotalCount() / elapsedNanoTime) / 100.0;
+        LOGGER.info("Current tpmTOTAL: {}\tCurrent tpmC: {}", tpmTotal, tpmC);
     }
 }

@@ -6,6 +6,8 @@ terminalWarehouseFixed=true
 terminals=32
 runSeconds=10
 
+reportIntervalSeconds=1
+
 //The following five values must add up to 100
 //The default percentages of 45, 43, 4, 4 & 4 match the TPC-C spec
 newOrderWeight=45

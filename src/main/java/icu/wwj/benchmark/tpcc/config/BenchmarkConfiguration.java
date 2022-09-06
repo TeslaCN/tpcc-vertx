@@ -21,6 +21,8 @@ public class BenchmarkConfiguration {
     
     private final int runSeconds;
     
+    private final int reportIntervalSeconds;
+    
     public BenchmarkConfiguration(Properties props) {
         conn = System.getProperty("conn", props.getProperty("conn"));
         vertxOptions = System.getProperty("vertxOptions", props.getProperty("vertxOptions", "{}"));
@@ -29,5 +31,6 @@ public class BenchmarkConfiguration {
         warehouseFixed = Boolean.parseBoolean(System.getProperty("warehouseFixed", props.getProperty("warehouseFixed", Boolean.FALSE.toString())));
         terminals = Integer.parseInt(System.getProperty("terminals", props.getProperty("terminals")));
         runSeconds = Integer.parseInt(System.getProperty("runSeconds", props.getProperty("runSeconds")));
+        reportIntervalSeconds = Integer.parseInt(System.getProperty("reportIntervalSeconds", props.getProperty("reportIntervalSeconds", "0")));
     }
 }
