@@ -73,7 +73,9 @@ public final class TPCC {
         props.load(new FileInputStream(Paths.get(System.getProperty("props", "props.template")).toFile()));
         BenchmarkConfiguration configuration = new BenchmarkConfiguration(props);
         Vertx vertx = Vertx.vertx(new VertxOptions(new JsonObject(configuration.getVertxOptions())));
-        Pool pool = Pool.pool(vertx, SqlConnectOptions.fromUri(configuration.getConn()), new PoolOptions(new JsonObject(configuration.getPoolOptions())));
+        // cachePreparedStatements could not be specified in URI. https://github.com/eclipse-vertx/vertx-sql-client/issues/664
+        SqlConnectOptions connectOptions = SqlConnectOptions.fromUri(configuration.getConn()).setCachePreparedStatements(true);
+        Pool pool = Pool.pool(vertx, connectOptions, new PoolOptions(new JsonObject(configuration.getPoolOptions())));
         Future<Void> start = new TPCC(configuration, vertx, pool).run();
         start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
     }
