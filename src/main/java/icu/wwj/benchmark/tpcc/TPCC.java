@@ -21,7 +21,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 public final class TPCC {
     
@@ -33,23 +32,26 @@ public final class TPCC {
     
     private final Pool pool;
     
-    private final ResultRecorder resultRecorder;
+    private final ResultReporter resultReporter;
+    
+    private final ResultFileWriter resultFileWriter;
     
     public TPCC(BenchmarkConfiguration configuration, Vertx vertx, Pool pool) {
         this.configuration = configuration;
         this.vertx = vertx;
         vertx.exceptionHandler(cause -> LOGGER.error("Unhandled exception", cause));
         this.pool = pool;
-        resultRecorder = new ResultRecorder(vertx, "/tmp/tpcc_result_" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()) + ".csv");
+        resultReporter = new ResultReporter(configuration.getTerminals());
+        resultFileWriter = new ResultFileWriter(vertx, "/tmp/tpcc_result_" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()) + ".csv");
     }
     
     public Future<Void> run() {
         LOGGER.info("Starting TPC-C.");
         AtomicInteger idGenerator = new AtomicInteger();
-        return vertx.deployVerticle(() -> new Terminal(configuration, idGenerator.incrementAndGet(), pool), new DeploymentOptions().setInstances(configuration.getTerminals()))
+        return vertx.deployVerticle(() -> new Terminal(configuration, idGenerator.incrementAndGet(), pool, resultReporter), new DeploymentOptions().setInstances(configuration.getTerminals()))
                 .compose(this::onTerminalsReady)
                 .onFailure(cause -> LOGGER.error("Failed to start terminals, caused by:", cause))
-                .eventually(__ -> resultRecorder.close());
+                .eventually(__ -> resultFileWriter.close());
     }
 
     public Future<Void> onTerminalsReady(String deploymentId) {
@@ -57,22 +59,13 @@ public final class TPCC {
         long sessionStartNanoTime = System.nanoTime();
         vertx.eventBus().publish("start", sessionStartNanoTime);
         Promise<Void> promise = Promise.promise();
-        AtomicLong newOrderCount = new AtomicLong(), totalCount = new AtomicLong();
-        AtomicInteger remainTerminals = new AtomicInteger(configuration.getTerminals());
         vertx.setTimer(TimeUnit.SECONDS.toMillis(configuration.getRunSeconds()), event -> {
             LOGGER.info("Stopping terminals.");
-            vertx.eventBus().<TerminalResult>localConsumer(TerminalResult.class.getSimpleName(), msg -> {
-                newOrderCount.addAndGet(msg.body().getNewOrderCount());
-                totalCount.addAndGet(msg.body().getTotalCount());
-                if (0 == remainTerminals.decrementAndGet()) {
-                    promise.complete();
-                }
-            });
-            vertx.undeploy(deploymentId).onFailure(cause -> LOGGER.error("Error occurred:", cause));
+            vertx.undeploy(deploymentId).onSuccess(__ -> promise.complete()).onFailure(cause -> LOGGER.error("Error occurred:", cause));
         });
         return promise.future()
-                .onSuccess(compositeFuture -> LOGGER.info("Total: {}", totalCount.get()))
-                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", newOrderCount.get()));
+                .onSuccess(compositeFuture -> LOGGER.info("Total: {}", resultReporter.sumTotalCount()))
+                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", resultReporter.sumNewOrderCount()));
     }
     
     public static void main(String[] args) throws IOException {

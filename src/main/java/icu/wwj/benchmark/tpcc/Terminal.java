@@ -9,10 +9,9 @@ import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.eventbus.MessageProducer;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.SqlConnection;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class Terminal extends AbstractVerticle {
@@ -45,22 +44,22 @@ public class Terminal extends AbstractVerticle {
 
     private DeliveryExecutor deliveryExecutor;
 
-    @Getter
-    private long newOrderCount;
+    private final AtomicLong newOrderCount;
 
-    @Getter
-    private long totalCount;
+    private final AtomicLong totalCount;
 
     private boolean stop;
 
     private Promise<Void> stopPromise;
 
-    public Terminal(BenchmarkConfiguration configuration, int id, Pool pool) {
+    public Terminal(BenchmarkConfiguration configuration, int id, Pool pool, ResultReporter resultReporter) {
         this.configuration = configuration;
         this.id = id;
         random = new jTPCCRandom();
         this.pool = pool;
         address = "Terminal-" + id;
+        newOrderCount = resultReporter.getNewOrderCounts()[id - 1];
+        totalCount = resultReporter.getTotalCount()[id - 1];
     }
 
     @Override
@@ -76,7 +75,7 @@ public class Terminal extends AbstractVerticle {
         stockLevelExecutor = new StockLevelExecutor(configuration, random, connection);
         deliveryExecutor = new DeliveryExecutor(configuration, random, connection);
         transactionConsumer = getVertx().eventBus().localConsumer(address);
-        resultProducer = getVertx().eventBus().sender(ResultRecorder.ADDRESS);
+        resultProducer = getVertx().eventBus().sender(ResultFileWriter.ADDRESS);
         MessageConsumer<Long> startConsumer = getVertx().eventBus().localConsumer("start");
         startConsumer.handler(msg -> {
             startExecutingTransactions(msg.body());
@@ -93,13 +92,12 @@ public class Terminal extends AbstractVerticle {
 
     private void handleTPCCTransaction(Message<String> message) {
         if (stop) {
-            getVertx().eventBus().publish(TerminalResult.class.getSimpleName(), new TerminalResult(totalCount, newOrderCount));
             stopPromise.complete();
             return;
         }
         long transactionStartNanoTime = System.nanoTime();
         (switch (message.body()) {
-            case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount++);
+            case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount.incrementAndGet());
             case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute).map(false);
             case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute).map(false);
             case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute).map(false);
@@ -115,7 +113,7 @@ public class Terminal extends AbstractVerticle {
     }
 
     private void onTransactionSuccess(long transactionStartNanoTime, String transactionType, boolean rollback) {
-        totalCount++;
+        totalCount.incrementAndGet();
         long transactionFinishNanoTime = System.nanoTime();
         long elapsedMillis = (transactionFinishNanoTime - sessionStartNanoTime) / 1_000_000;
         long transactionTookMillis = (transactionFinishNanoTime - transactionStartNanoTime) / 1_000_000;
