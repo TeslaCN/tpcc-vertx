@@ -1,6 +1,8 @@
 package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
+import icu.wwj.benchmark.tpcc.sharding.ShardingConfig;
+import icu.wwj.benchmark.tpcc.sharding.ShardingNumber;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -71,8 +73,10 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
                         "FROM bmsql_stock " +
                         "WHERE s_w_id = $1 AND s_i_id = $2 " +
                         "FOR UPDATE");
-        stmtNewOrderSelectItem = connection.preparedQuery(
-                "SELECT i_price, i_name, i_data FROM bmsql_item WHERE i_id = $1");
+        String selectItemSQL = ShardingConfig.instance.routeItemByHint
+                ? "SELECT i_price, i_name, i_data FROM bmsql_item,bmsql_warehouse WHERE i_id = $1 AND w_id = $2"
+                : "SELECT i_price, i_name, i_data FROM bmsql_item WHERE i_id = $1";
+        stmtNewOrderSelectItem = connection.preparedQuery(selectItemSQL);
         stmtNewOrderUpdateStock = connection.preparedQuery(
                 "UPDATE bmsql_stock " +
                         "SET s_quantity = $1, s_ytd = s_ytd + $2, " +
@@ -94,11 +98,11 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
         int o_ol_cnt = random.nextInt(5, 15);
         // 2.4.1.5
         for (; i < o_ol_cnt; i++) {
-            newOrder.ol_i_id[i] = random.getItemID();
+            newOrder.ol_i_id[i] = ShardingConfig.instance.routeItemByHint ? random.getItemID() : random.getItemIdByWarehouse(newOrder.w_id);
             if (random.nextInt(1, 100) <= 99) {
                 newOrder.ol_supply_w_id[i] = warehouse;
             } else {
-                int randomWarehouse = random.nextInt(1, configuration.getWarehouses());
+                int randomWarehouse = ShardingNumber.oneSharding(newOrder.w_id, random.nextInt(1, configuration.getWarehouses()));
                 newOrder.ol_supply_w_id[i] = randomWarehouse;
                 if (randomWarehouse != warehouse) {
                     newOrder.o_all_local = 0;
@@ -108,7 +112,7 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
         }
         // 2.4.1.4
         if (random.nextInt(1, 100) == 1) {
-            newOrder.ol_i_id[i - 1] += (random.nextInt(1, 9) * 1000000);
+            newOrder.ol_i_id[i - 1] = ShardingNumber.oneSharding(newOrder.w_id, random.nextInt(1, 9) * 1000000 + newOrder.ol_i_id[i - 1]);
         }
         for (; i < 15; i++) {
             newOrder.ol_i_id[i] = 0;
@@ -206,7 +210,7 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
     }
 
     private Future<Void> processItem(NewOrder newOrder, int ol_number, int i_id, int seq, List<Tuple> orderLineInserts, List<Tuple> stockUpdates) {
-        return stmtNewOrderSelectItem.execute(Tuple.of(i_id)).compose(itemRows -> {
+        return stmtNewOrderSelectItem.execute(ShardingConfig.instance.routeItemByHint ? Tuple.of(i_id, newOrder.w_id) : Tuple.of(i_id)).compose(itemRows -> {
             if (0 == itemRows.size()) {
                 if (i_id < 1 || i_id > 100000) {
                     return Future.failedFuture(ItemInvalidException.INSTANCE);

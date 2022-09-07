@@ -1,6 +1,7 @@
 package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
+import icu.wwj.benchmark.tpcc.sharding.ShardingNumber;
 import io.vertx.core.Future;
 import io.vertx.sqlclient.PreparedQuery;
 import io.vertx.sqlclient.Row;
@@ -218,7 +219,7 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
         if (random.nextInt(1, 100) > 85) {
             payment.c_d_id = random.nextInt(1, 10);
             while (payment.c_w_id == payment.w_id && configuration.getWarehouses() > 1) {
-                payment.c_w_id = random.nextInt(1, configuration.getWarehouses());
+                payment.c_w_id = ShardingNumber.oneSharding(payment.w_id, random.nextInt(1, configuration.getWarehouses()));
             }
         }
         if (random.nextInt(1, 100) <= 60) {

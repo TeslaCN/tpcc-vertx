@@ -1,6 +1,7 @@
 package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
+import icu.wwj.benchmark.tpcc.sharding.ShardingConfig;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -113,6 +114,7 @@ public final class TPCC {
         Properties props = new Properties();
         props.load(new FileInputStream(Paths.get(System.getProperty("props", "props.template")).toFile()));
         BenchmarkConfiguration configuration = new BenchmarkConfiguration(props);
+        ShardingConfig.instance.init(props);
         Vertx vertx = Vertx.vertx(new VertxOptions(new JsonObject(configuration.getVertxOptions())));
         // cachePreparedStatements could not be specified in URI. https://github.com/eclipse-vertx/vertx-sql-client/issues/664
         SqlConnectOptions connectOptions = SqlConnectOptions.fromUri(configuration.getConn()).setCachePreparedStatements(true);

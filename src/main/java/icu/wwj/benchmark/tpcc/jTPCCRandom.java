@@ -8,6 +8,9 @@ package icu.wwj.benchmark.tpcc;/*
  *
  */
 
+import icu.wwj.benchmark.tpcc.sharding.ShardingConfig;
+import icu.wwj.benchmark.tpcc.sharding.ShardingNumber;
+
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -228,5 +231,20 @@ public class jTPCCRandom {
 
     public long getNURandCI_ID() {
         return nURandCI_ID;
+    }
+    
+    /*
+     * getItemIdByWarehouse()
+     *
+     *     Produce a non uniform random Item ID for every thread.
+     */
+    public int getItemIdByWarehouse(int warehouse)
+    {
+        int newItem = (int)(((nextLong(0, 8191) | nextLong(1, 100000)) + nURandCI_ID) % 100000) + 1;
+        int val = ShardingNumber.oneSharding(warehouse, newItem);
+        if (val > 100000) {
+            val -= ShardingConfig.instance.shardingNumber;
+        }
+        return val;
     }
 }
