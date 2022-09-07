@@ -73,6 +73,14 @@ public final class TPCC {
                 .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", resultReporter.sumNewOrderCount()));
     }
     
+    private void reportCurrentTPM() {
+        long currentNanoTime = System.nanoTime();
+        long elapsedNanoTime = (currentNanoTime - sessionStartNanoTime) / 1000000;
+        double tpmC = (double) (100 * 60 * 1000 * resultReporter.sumNewOrderCount() / elapsedNanoTime) / 100.0;
+        double tpmTotal = (double) (100 * 60 * 1000 * resultReporter.sumTotalCount() / elapsedNanoTime) / 100.0;
+        LOGGER.info("Current tpmTOTAL: {}\tCurrent tpmC: {}", tpmTotal, tpmC);
+    }
+    
     public static void main(String[] args) throws IOException {
         Properties props = new Properties();
         props.load(new FileInputStream(Paths.get(System.getProperty("props", "props.template")).toFile()));
@@ -82,14 +90,6 @@ public final class TPCC {
         SqlConnectOptions connectOptions = SqlConnectOptions.fromUri(configuration.getConn()).setCachePreparedStatements(true);
         Pool pool = Pool.pool(vertx, connectOptions, new PoolOptions(new JsonObject(configuration.getPoolOptions())));
         Future<Void> start = new TPCC(configuration, vertx, pool).run();
-        start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> vertx.close());
-    }
-
-    private void reportCurrentTPM() {
-        long currentNanoTime = System.nanoTime();
-        long elapsedNanoTime = (currentNanoTime - sessionStartNanoTime) / 1000000;
-        double tpmC = (double) (100 * 60 * 1000 * resultReporter.sumNewOrderCount() / elapsedNanoTime) / 100.0;
-        double tpmTotal = (double) (100 * 60 * 1000 * resultReporter.sumTotalCount() / elapsedNanoTime) / 100.0;
-        LOGGER.info("Current tpmTOTAL: {}\tCurrent tpmC: {}", tpmTotal, tpmC);
+        start.onSuccess(__ -> LOGGER.info("TPC-C Finished")).eventually(__ -> pool.close()).eventually(__ -> vertx.close());
     }
 }

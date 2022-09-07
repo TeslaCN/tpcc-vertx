@@ -92,7 +92,10 @@ public class Terminal extends AbstractVerticle {
 
     private void handleTPCCTransaction(Message<String> message) {
         if (stop) {
-            stopPromise.complete();
+            connection.close().eventually(__ -> {
+                stopPromise.complete();
+                return Future.succeededFuture();
+            });
             return;
         }
         long transactionStartNanoTime = System.nanoTime();
