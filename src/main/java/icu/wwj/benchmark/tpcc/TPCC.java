@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class TPCC {
     
@@ -36,7 +37,13 @@ public final class TPCC {
     
     private final ResultFileWriter resultFileWriter;
     
+    private LocalDateTime sessionStartLocalDateTime;
+    
     private long sessionStartNanoTime;
+    
+    private LocalDateTime sessionStopLocalDateTime;
+    
+    private long sessionStopNanoTime;
     
     public TPCC(BenchmarkConfiguration configuration, Vertx vertx, Pool pool) {
         this.configuration = configuration;
@@ -58,19 +65,26 @@ public final class TPCC {
 
     public Future<Void> onTerminalsReady(String deploymentId) {
         LOGGER.info("Starting terminals.");
+        sessionStartLocalDateTime = LocalDateTime.now();
         sessionStartNanoTime = System.nanoTime();
         vertx.eventBus().publish("start", sessionStartNanoTime);
         Promise<Void> promise = Promise.promise();
+        AtomicReference<Long> realtimeReporter = new AtomicReference<>();
+        if (configuration.getReportIntervalSeconds() > 0) {
+            realtimeReporter.set(vertx.setPeriodic(configuration.getReportIntervalSeconds() * 1000L, __ -> reportCurrentTPM()));
+        }
         vertx.setTimer(TimeUnit.SECONDS.toMillis(configuration.getRunSeconds()), event -> {
             LOGGER.info("Stopping terminals.");
-            vertx.undeploy(deploymentId).onSuccess(__ -> promise.complete()).onFailure(cause -> LOGGER.error("Error occurred:", cause));
+            if (null != realtimeReporter.get()) {
+                vertx.cancelTimer(realtimeReporter.get());
+            }
+            vertx.undeploy(deploymentId).onSuccess(__ -> {
+                sessionStopNanoTime = System.nanoTime();
+                sessionStopLocalDateTime = LocalDateTime.now();
+                promise.complete();
+            }).onFailure(cause -> LOGGER.error("Error occurred:", cause));
         });
-        if (configuration.getReportIntervalSeconds() > 0) {
-            vertx.setPeriodic(configuration.getReportIntervalSeconds() * 1000L, __ -> reportCurrentTPM());
-        }
-        return promise.future()
-                .onSuccess(compositeFuture -> LOGGER.info("Total: {}", resultReporter.sumTotalCount()))
-                .onSuccess(compositeFuture -> LOGGER.info("New Order: {}", resultReporter.sumNewOrderCount()));
+        return promise.future().onSuccess(__ -> finalReport());
     }
     
     private void reportCurrentTPM() {
@@ -79,6 +93,20 @@ public final class TPCC {
         double tpmC = (double) (100 * 60 * 1000 * resultReporter.sumNewOrderCount() / elapsedNanoTime) / 100.0;
         double tpmTotal = (double) (100 * 60 * 1000 * resultReporter.sumTotalCount() / elapsedNanoTime) / 100.0;
         LOGGER.info("Current tpmTOTAL: {}\tCurrent tpmC: {}", tpmTotal, tpmC);
+    }
+    
+    private void finalReport() {
+        long elapsedNanoTime = (sessionStopNanoTime - sessionStartNanoTime) / 1000000;
+        long newOrderCount = resultReporter.sumNewOrderCount();
+        long totalCount = resultReporter.sumTotalCount();
+        double tpmC = (double) (100 * 60 * 1000 * newOrderCount / elapsedNanoTime) / 100.0;
+        double tpmTotal = (double) (100 * 60 * 1000 * totalCount / elapsedNanoTime) / 100.0;
+        LOGGER.info("Measured tpmC (NewOrders) = {}", tpmC);
+        LOGGER.info("Measured tpmTOTAL = {}", tpmTotal);
+        LOGGER.info("Session Start     = {}", sessionStartLocalDateTime);
+        LOGGER.info("Session End       = {}", sessionStopLocalDateTime);
+        LOGGER.info("Transaction Count = {}", totalCount);
+        LOGGER.info("New Order Count   = {}", newOrderCount);
     }
     
     public static void main(String[] args) throws IOException {
