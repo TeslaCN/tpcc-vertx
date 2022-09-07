@@ -1,4 +1,4 @@
-conn=postgresql://postgres:postgres@127.0.0.1:5432/bmsql?cachePreparedStatements=true&preparedStatementCacheMaxSize=256
+conn=shardingsphere:/home/wuweijie/projects/tpcc-vertx/config-none.yaml
 vertxOptions={"preferNativeTransport":true, "eventLoopPoolSize":4, "workerPoolSize":1}
 poolOptions={"maxSize":32, "maxWaitQueueSize":0}
 warehouses=32

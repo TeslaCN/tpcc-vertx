@@ -1,0 +1,125 @@
+dataSources:
+  ds_0:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://127.0.0.1:5432/bmsql_0
+    maximumPoolSize: 65
+    minimumIdle: 0
+    password: postgres
+    username: postgres
+    connectionTimeout: 30000
+    registerMbeans: true
+  ds_1:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://127.0.0.1:5432/bmsql_1
+    maximumPoolSize: 65
+    minimumIdle: 0
+    password: postgres
+    username: postgres
+    connectionTimeout: 30000
+    registerMbeans: true
+  ds_2:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://127.0.0.1:5432/bmsql_2
+    maximumPoolSize: 65
+    minimumIdle: 0
+    password: postgres
+    username: postgres
+    connectionTimeout: 30000
+    registerMbeans: true
+  ds_3:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://127.0.0.1:5432/bmsql_3
+    maximumPoolSize: 65
+    minimumIdle: 0
+    password: postgres
+    username: postgres
+    connectionTimeout: 30000
+    registerMbeans: true
+props:
+  max-connections-size-per-query: 1
+rules:
+  - !SHARDING
+    bindingTables:
+      - bmsql_warehouse, bmsql_customer
+      - bmsql_stock, bmsql_district, bmsql_order_line
+    defaultDatabaseStrategy:
+      none:
+    defaultTableStrategy:
+      none:
+    keyGenerators:
+    tables:
+      bmsql_config:
+        actualDataNodes: ds_0.bmsql_config
+
+      bmsql_warehouse:
+        actualDataNodes: ds_${0..3}.bmsql_warehouse
+        databaseStrategy:
+          standard:
+            shardingColumn: w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_district:
+        actualDataNodes: ds_${0..3}.bmsql_district
+        databaseStrategy:
+          standard:
+            shardingColumn: d_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_customer:
+        actualDataNodes: ds_${0..3}.bmsql_customer
+        databaseStrategy:
+          standard:
+            shardingColumn: c_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_item:
+        actualDataNodes: ds_${0..3}.bmsql_item
+        databaseStrategy:
+          standard:
+            shardingColumn: i_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_history:
+        actualDataNodes: ds_${0..3}.bmsql_history
+        databaseStrategy:
+          standard:
+            shardingColumn: h_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_oorder:
+        actualDataNodes: ds_${0..3}.bmsql_oorder
+        databaseStrategy:
+          standard:
+            shardingColumn: o_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_stock:
+        actualDataNodes: ds_${0..3}.bmsql_stock
+        databaseStrategy:
+          standard:
+            shardingColumn: s_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_new_order:
+        actualDataNodes: ds_${0..3}.bmsql_new_order
+        databaseStrategy:
+          standard:
+            shardingColumn: no_w_id
+            shardingAlgorithmName: mod_4
+
+      bmsql_order_line:
+        actualDataNodes: ds_${0..3}.bmsql_order_line
+        databaseStrategy:
+          standard:
+            shardingColumn: ol_w_id
+            shardingAlgorithmName: mod_4
+
+    shardingAlgorithms:
+      mod_4:
+        type: MOD
+        props:
+          sharding-count: 4
