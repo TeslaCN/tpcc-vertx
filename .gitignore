@@ -24,6 +24,7 @@ hs_err_pid*
 
 # User-specific stuff
 .idea
+*.iml
 
 # Mongo Explorer plugin
 .idea/**/mongoSettings.xml
