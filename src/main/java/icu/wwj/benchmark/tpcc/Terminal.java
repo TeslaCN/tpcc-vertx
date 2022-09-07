@@ -25,7 +25,9 @@ public class Terminal extends AbstractVerticle {
     private final Pool pool;
 
     private SqlConnection connection;
-
+    
+    private final String[] transactionsMap;
+    
     private final String address;
 
     private volatile long sessionStartNanoTime;
@@ -60,6 +62,7 @@ public class Terminal extends AbstractVerticle {
         address = "Terminal-" + id;
         newOrderCount = resultReporter.getNewOrderCounts()[id - 1];
         totalCount = resultReporter.getTotalCount()[id - 1];
+        transactionsMap = TransactionMapGenerator.generate(configuration);
     }
 
     @Override
@@ -124,14 +127,7 @@ public class Terminal extends AbstractVerticle {
     }
 
     private void sendNextTransaction() {
-        // TODO complete transactions
-        getVertx().eventBus().send(address, switch (random.nextInt(0, 10)) {
-            case 1, 2, 3, 4 -> TPCCTransaction.NEW_ORDER.name();
-            case 5, 6, 7, 8 -> TPCCTransaction.PAYMENT.name();
-            case 9 -> TPCCTransaction.ORDER_STATUS.name();
-            case 10 -> TPCCTransaction.STOCK_LEVEL.name();
-            default -> TPCCTransaction.DELIVERY.name();
-        });
+        getVertx().eventBus().send(address, transactionsMap[(random.nextInt(0, transactionsMap.length - 1))]);
     }
 
     @Override
