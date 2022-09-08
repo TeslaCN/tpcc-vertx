@@ -67,8 +67,8 @@ public class DeliveryExecutor implements TransactionExecutor<Void> {
     }
 
     @Override
-    public Future<Void> execute(Transaction transaction) {
-        Delivery generated = generateDelivery();
+    public Future<Void> execute(Transaction transaction, final int warehouseId) {
+        Delivery generated = generateDelivery(warehouseId);
         return Future.succeededFuture(generated)
                 .compose(delivery -> handleDistrictId(delivery, 1))
                 .compose(delivery -> handleDistrictId(delivery, 2))
@@ -83,9 +83,8 @@ public class DeliveryExecutor implements TransactionExecutor<Void> {
                 .compose(__ -> transaction.commit(), cause -> transaction.rollback().compose(unused -> Future.failedFuture(cause)));
     }
 
-    private Delivery generateDelivery() {
-        int warehouse = random.nextInt(1, configuration.getWarehouses());
-        Delivery delivery = new Delivery(warehouse);
+    private Delivery generateDelivery(int warehouseId) {
+        Delivery delivery = new Delivery(warehouseId);
         delivery.ol_delivery_d = LocalDateTime.now();
         delivery.o_carrier_id = random.nextInt(1, 10);
         Arrays.fill(delivery.delivered_o_id, -1);

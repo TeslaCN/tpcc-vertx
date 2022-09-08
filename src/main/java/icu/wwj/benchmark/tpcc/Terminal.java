@@ -49,6 +49,8 @@ public class Terminal extends AbstractVerticle {
     private final AtomicLong newOrderCount;
 
     private final AtomicLong totalCount;
+    
+    private int warehouseId;
 
     private boolean stop;
 
@@ -89,7 +91,12 @@ public class Terminal extends AbstractVerticle {
     public void startExecutingTransactions(long sessionStartNanoTime) {
         transactionConsumer.handler(this::handleTPCCTransaction);
         this.sessionStartNanoTime = sessionStartNanoTime;
-        log.info("Terminal-{} started.", id);
+        if (configuration.isTerminalWarehouseFixed()) {
+            warehouseId = random.nextInt(1, configuration.getWarehouses());
+            log.info("Terminal-{} started. w_id = {}", id, warehouseId);
+        } else {
+            log.info("Terminal-{} started. w_id is not fixed", id);
+        }
         sendNextTransaction();
     }
 
@@ -101,14 +108,17 @@ public class Terminal extends AbstractVerticle {
             });
             return;
         }
+        if (!configuration.isTerminalWarehouseFixed()) {
+            warehouseId = random.nextInt(1, configuration.getWarehouses());
+        }
         long transactionStartNanoTime = System.nanoTime();
         (switch (message.body()) {
-            case "NEW_ORDER" -> connection.begin().compose(newOrderExecutor::execute).onSuccess(__ -> newOrderCount.incrementAndGet());
-            case "PAYMENT" -> connection.begin().compose(paymentExecutor::execute).map(false);
-            case "ORDER_STATUS" -> connection.begin().compose(orderStatusExecutor::execute).map(false);
-            case "STOCK_LEVEL" -> connection.begin().compose(stockLevelExecutor::execute).map(false);
+            case "NEW_ORDER" -> connection.begin().compose(transaction -> newOrderExecutor.execute(transaction, warehouseId)).onSuccess(__ -> newOrderCount.incrementAndGet());
+            case "PAYMENT" -> connection.begin().compose(transaction -> paymentExecutor.execute(transaction, warehouseId)).map(false);
+            case "ORDER_STATUS" -> connection.begin().compose(transaction -> orderStatusExecutor.execute(transaction, warehouseId)).map(false);
+            case "STOCK_LEVEL" -> connection.begin().compose(transaction -> stockLevelExecutor.execute(transaction, warehouseId)).map(false);
             // TODO Transaction delivery which is required to execute in background is executed immediately at present
-            case "DELIVERY" -> connection.begin().compose(deliveryExecutor::execute).map(false);
+            case "DELIVERY" -> connection.begin().compose(transaction -> deliveryExecutor.execute(transaction, warehouseId)).map(false);
             default -> Future.failedFuture("Unknown transaction type");
         }).onSuccess(rollback -> onTransactionSuccess(transactionStartNanoTime, message.body(), (boolean) rollback))
                 .recover(cause -> {

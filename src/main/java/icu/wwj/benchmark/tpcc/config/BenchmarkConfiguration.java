@@ -15,7 +15,7 @@ public class BenchmarkConfiguration {
     
     private final int warehouses;
     
-    private final boolean warehouseFixed;
+    private final boolean terminalWarehouseFixed;
     
     private final int terminals;
     
@@ -38,7 +38,7 @@ public class BenchmarkConfiguration {
         vertxOptions = System.getProperty("vertxOptions", props.getProperty("vertxOptions", "{}"));
         poolOptions = System.getProperty("poolOptions", props.getProperty("poolOptions", "{}"));
         warehouses = Integer.parseInt(System.getProperty("warehouses", props.getProperty("warehouses")));
-        warehouseFixed = Boolean.parseBoolean(System.getProperty("warehouseFixed", props.getProperty("warehouseFixed", Boolean.FALSE.toString())));
+        terminalWarehouseFixed = Boolean.parseBoolean(System.getProperty("terminalWarehouseFixed", props.getProperty("terminalWarehouseFixed", Boolean.FALSE.toString())));
         terminals = Integer.parseInt(System.getProperty("terminals", props.getProperty("terminals")));
         runSeconds = Integer.parseInt(System.getProperty("runSeconds", props.getProperty("runSeconds")));
         reportIntervalSeconds = Integer.parseInt(System.getProperty("reportIntervalSeconds", props.getProperty("reportIntervalSeconds", "0")));

@@ -55,8 +55,8 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
                         "    ORDER BY ol_w_id, ol_d_id, ol_o_id, ol_number");
     }
 
-    private OrderStatus generateOrderStatus() {
-        OrderStatus orderStatus = new OrderStatus(random.nextInt(1, configuration.getWarehouses()), random.nextInt(1, 10));
+    private OrderStatus generateOrderStatus(int warehouseId) {
+        OrderStatus orderStatus = new OrderStatus(warehouseId, random.nextInt(1, 10));
         if (random.nextInt(1, 100) <= 60) {
             orderStatus.c_id = 0;
             orderStatus.c_last = random.getCLast();
@@ -68,8 +68,8 @@ public class OrderStatusExecutor implements TransactionExecutor<Void> {
     }
 
     @Override
-    public Future<Void> execute(Transaction transaction) {
-        OrderStatus generated = generateOrderStatus();
+    public Future<Void> execute(Transaction transaction, final int warehouseId) {
+        OrderStatus generated = generateOrderStatus(warehouseId);
         Future<OrderStatus> future = Future.succeededFuture(generated);
         if (null != generated.c_last) {
             future = future.compose(this::selectCustomerListByLast);

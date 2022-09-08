@@ -37,7 +37,7 @@ public class StockLevelExecutor implements TransactionExecutor<Void> {
     }
 
     @Override
-    public Future<Void> execute(Transaction transaction) {
+    public Future<Void> execute(Transaction transaction, final int warehouseId) {
         StockLevel stockLevel = generateStockLevel();
         return stmtStockLevelSelectLow.execute(Tuple.of(stockLevel.w_id, stockLevel.threshold, stockLevel.w_id, stockLevel.d_id)).compose(rows -> {
             if (0 == rows.size()) {

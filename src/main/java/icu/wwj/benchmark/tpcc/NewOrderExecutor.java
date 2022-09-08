@@ -87,8 +87,7 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
                         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)");
     }
 
-    private NewOrder generateNewOrder() {
-        int warehouse = random.nextInt(1, configuration.getWarehouses());
+    private NewOrder generateNewOrder(int warehouse) {
         NewOrder newOrder = new NewOrder(warehouse, random.nextInt(1, 10), random.getCustomerID());
         int i = 0;
         // 2.4.1.3
@@ -120,8 +119,8 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
     }
 
     @Override
-    public Future<Boolean> execute(Transaction transaction) {
-        NewOrder generated = generateNewOrder();
+    public Future<Boolean> execute(Transaction transaction, int warehouseId) {
+        NewOrder generated = generateNewOrder(warehouseId);
         // The o_entry_d is now.
         generated.o_entry_d = LocalDateTime.now();
         int ol_cnt;

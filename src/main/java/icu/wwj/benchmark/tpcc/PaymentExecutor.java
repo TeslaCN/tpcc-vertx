@@ -95,8 +95,8 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
     }
 
     @Override
-    public Future<Void> execute(Transaction transaction) {
-        Payment generated = generatePayment();
+    public Future<Void> execute(Transaction transaction, int warehouseId) {
+        Payment generated = generatePayment(warehouseId);
         generated.h_date = LocalDateTime.now();
         Future<Payment> future = Future.succeededFuture(generated);
         // Update the DISTRICT.
@@ -210,9 +210,9 @@ public class PaymentExecutor implements TransactionExecutor<Void> {
         ).compose(__ -> transaction.commit(), cause -> transaction.rollback().compose(__ -> Future.failedFuture(cause)));
     }
 
-    private Payment generatePayment() {
+    private Payment generatePayment(int warehouseId) {
         // 2.5.1.1 & 2.5.1.2
-        Payment payment = new Payment(random.nextInt(1, configuration.getWarehouses()), random.nextInt(1, 10));
+        Payment payment = new Payment(warehouseId, random.nextInt(1, 10));
         payment.c_w_id = payment.w_id;
         payment.c_d_id = payment.d_id;
         if (random.nextInt(1, 100) > 85) {
