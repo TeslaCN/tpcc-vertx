@@ -1,6 +1,7 @@
 package icu.wwj.benchmark.tpcc;
 
 import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
+import icu.wwj.benchmark.tpcc.sharding.ShardingConfig;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -92,7 +93,7 @@ public class Terminal extends AbstractVerticle {
         transactionConsumer.handler(this::handleTPCCTransaction);
         this.sessionStartNanoTime = sessionStartNanoTime;
         if (configuration.isTerminalWarehouseFixed()) {
-            warehouseId = random.nextInt(1, configuration.getWarehouses());
+            warehouseId = ShardingConfig.instance.availableWarehouses[random.nextInt(0, ShardingConfig.instance.availableWarehouses.length - 1)];
             log.info("Terminal-{} started. w_id = {}", id, warehouseId);
         } else {
             log.info("Terminal-{} started. w_id is not fixed", id);
@@ -109,7 +110,7 @@ public class Terminal extends AbstractVerticle {
             return;
         }
         if (!configuration.isTerminalWarehouseFixed()) {
-            warehouseId = random.nextInt(1, configuration.getWarehouses());
+            warehouseId = ShardingConfig.instance.availableWarehouses[random.nextInt(0, ShardingConfig.instance.availableWarehouses.length - 1)];
         }
         long transactionStartNanoTime = System.nanoTime();
         (switch (message.body()) {

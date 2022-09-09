@@ -2,6 +2,7 @@ conn=shardingsphere:/home/wuweijie/projects/tpcc-vertx/config-none.yaml
 vertxOptions={"preferNativeTransport":true, "eventLoopPoolSize":4, "workerPoolSize":1}
 poolOptions={"maxSize":32, "maxWaitQueueSize":0}
 warehouses=32
+warehousesAvailableRanges=1,3-7,10-20,32
 terminalWarehouseFixed=true
 terminals=32
 runSeconds=10
