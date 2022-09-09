@@ -13,7 +13,12 @@ import io.vertx.sqlclient.Tuple;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.StringJoiner;
 
 public class NewOrderExecutor implements TransactionExecutor<Boolean> {
     
@@ -38,6 +43,8 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
     public PreparedQuery<RowSet<Row>> stmtNewOrderUpdateStock;
 
     public PreparedQuery<RowSet<Row>> stmtNewOrderInsertOrderLine;
+    
+    private final Map<Integer, PreparedQuery<RowSet<Row>>> stmtNewOrderMultiValuesInsertOrderLine = new HashMap<>(16, 1);
 
     public NewOrderExecutor(BenchmarkConfiguration configuration, jTPCCRandom random, SqlConnection connection) {
         this.configuration = configuration;
@@ -89,6 +96,25 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
                         "    ol_i_id, ol_supply_w_id, ol_quantity, " +
                         "    ol_amount, ol_dist_info) " +
                         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)");
+        if (ShardingConfig.instance.useMultiValuesInsert) {
+            for (int i = 1; i <= 15; i++) {
+                StringJoiner values = new StringJoiner(",");
+                int parameterIndex = 1;
+                for (int j = 0; j < i; j++) {
+                    StringJoiner value = new StringJoiner(",", "(", ")");
+                    for (int p = 0; p < 9; p++) {
+                        value.add("$" + parameterIndex++);
+                    }
+                    values.add(value.toString());
+                }
+                String sql = "INSERT INTO bmsql_order_line (" +
+                        "    ol_o_id, ol_d_id, ol_w_id, ol_number, " +
+                        "    ol_i_id, ol_supply_w_id, ol_quantity, " +
+                        "    ol_amount, ol_dist_info) " +
+                        "VALUES " + values;
+                stmtNewOrderMultiValuesInsertOrderLine.put(i, connection.preparedQuery(sql));
+            }
+        }
     }
 
     private NewOrder generateNewOrder(int warehouse) {
@@ -191,25 +217,32 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
         ).compose(newOrder -> stmtNewOrderInsertNewOrder.execute(Tuple.of(newOrder.o_id, newOrder.d_id, newOrder.w_id)).map(newOrder)
                 // Insert the NEW_ORDER row
         ).compose(newOrder -> {
-            List<Tuple> orderLineInserts = new ArrayList<>(newOrder.o_ol_cnt);
+            List<Tuple> orderLineInserts = ShardingConfig.instance.useMultiValuesInsert ? Collections.emptyList() : new ArrayList<>(newOrder.o_ol_cnt);
+            List<Object> insertOrderLineParameters = ShardingConfig.instance.useMultiValuesInsert ? new ArrayList<>(9 * newOrder.o_ol_cnt) : Collections.emptyList();
             List<Tuple> stockUpdates = new ArrayList<>(newOrder.o_ol_cnt);
             Future<Void> orderLineFuture = Future.succeededFuture();
             for (int i = 0; i < newOrder.o_ol_cnt; i++) {
                 int ol_number = i + 1;
                 int seq = ol_seq[i];
                 final int i_id = newOrder.ol_i_id[seq];
-                orderLineFuture = orderLineFuture.compose(__ -> processItem(newOrder, ol_number, i_id, seq, orderLineInserts, stockUpdates));
+                orderLineFuture = orderLineFuture.compose(__ -> processItem(newOrder, ol_number, i_id, seq, orderLineInserts, stockUpdates, insertOrderLineParameters));
             }
             return orderLineFuture
                     .eventually(__ -> stockUpdates.isEmpty() ? Future.succeededFuture() : stmtNewOrderUpdateStock.executeBatch(stockUpdates))
-                    .eventually(__ -> orderLineInserts.isEmpty() ? Future.succeededFuture() : stmtNewOrderInsertOrderLine.executeBatch(orderLineInserts))
+                    .eventually(__ -> {
+                        if (ShardingConfig.instance.useMultiValuesInsert) {
+                            return insertOrderLineParameters.isEmpty() ? Future.succeededFuture() 
+                                    : stmtNewOrderMultiValuesInsertOrderLine.get(insertOrderLineParameters.size() / 9).execute(Tuple.wrap(insertOrderLineParameters));
+                        }
+                        return orderLineInserts.isEmpty() ? Future.succeededFuture() : stmtNewOrderInsertOrderLine.executeBatch(orderLineInserts);
+                    })
                     .compose(__ -> transaction.commit().map(false),
                             cause -> transaction.rollback()
                                     .compose(unused -> ItemInvalidException.INSTANCE == cause ? Future.succeededFuture(true) : Future.failedFuture(cause)));
         });
     }
 
-    private Future<Void> processItem(NewOrder newOrder, int ol_number, int i_id, int seq, List<Tuple> orderLineInserts, List<Tuple> stockUpdates) {
+    private Future<Void> processItem(NewOrder newOrder, int ol_number, int i_id, int seq, List<Tuple> orderLineInserts, List<Tuple> stockUpdates, List<Object> insertOrderLineParameters) {
         return stmtNewOrderSelectItem.execute(ShardingConfig.instance.routeItemByHint ? Tuple.of(i_id, newOrder.w_id) : Tuple.of(i_id)).compose(itemRows -> {
             if (0 == itemRows.size()) {
                 if (i_id < 1 || i_id > 100000) {
@@ -235,6 +268,20 @@ public class NewOrderExecutor implements TransactionExecutor<Boolean> {
                         newOrder.ol_supply_w_id[seq] == newOrder.w_id ? 0 : 1,
                         newOrder.ol_supply_w_id[seq],
                         newOrder.ol_i_id[seq]));
+                if (ShardingConfig.instance.useMultiValuesInsert) {
+                    insertOrderLineParameters.addAll(Arrays.asList(
+                            newOrder.o_id,
+                            newOrder.d_id,
+                            newOrder.w_id,
+                            ol_number,
+                            newOrder.ol_i_id[seq],
+                            newOrder.ol_supply_w_id[seq],
+                            newOrder.ol_quantity[seq],
+                            newOrder.ol_amount[seq],
+                            stockRow.getString(newOrder.d_id < 10 ? "s_dist_0" + newOrder.d_id : "s_dist_10")
+                    ));
+                    return null;
+                } 
                 orderLineInserts.add(Tuple.of(
                         newOrder.o_id,
                         newOrder.d_id,

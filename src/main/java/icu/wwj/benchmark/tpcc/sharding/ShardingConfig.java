@@ -40,6 +40,8 @@ public class ShardingConfig {
     
     public int[] availableWarehouses;
     
+    public boolean useMultiValuesInsert;
+    
     public void init(Properties prop) {
         warehouseTotal = Integer.parseInt(prop.getProperty("warehouses"));
         terminals = Integer.parseInt(prop.getProperty("terminals"));
@@ -52,6 +54,8 @@ public class ShardingConfig {
         String warehousesAvailableRanges = prop.getProperty("warehousesAvailableRanges", "").replace(" ", "");
         log.info("warehousesAvailableRanges=" + warehousesAvailableRanges);
         availableWarehouses = parseWarehousesAvailableRanges(warehousesAvailableRanges);
+        useMultiValuesInsert = Boolean.parseBoolean(prop.getProperty("useMultiValuesInsert", Boolean.FALSE.toString()));
+        log.info("useMultiValuesInsert=" + useMultiValuesInsert);
     }
     
     private int[] parseWarehousesAvailableRanges(String warehousesAvailableRanges) {
