@@ -17,10 +17,10 @@ orderStatusWeight=4
 deliveryWeight=4
 stockLevelWeight=4
 
-shardingType=MOD
-# shardingType=RANGE
+# shardingType=MOD
+shardingType=RANGE
 # shardingType=NONE
 
 shardingNumber=4
-# routeItemByHint=true
-useMultiValuesInsert=true
+# useMultiValuesInsert=true
+itemIsBroadcastTable=true

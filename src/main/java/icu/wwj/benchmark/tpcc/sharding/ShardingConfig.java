@@ -36,11 +36,11 @@ public class ShardingConfig {
     
     public int shardingNumber;
     
-    public boolean routeItemByHint;
-    
     public int[] availableWarehouses;
     
     public boolean useMultiValuesInsert;
+    
+    public boolean itemIsBroadcastTable;
     
     public void init(Properties prop) {
         warehouseTotal = Integer.parseInt(prop.getProperty("warehouses"));
@@ -49,13 +49,13 @@ public class ShardingConfig {
         log.info("shardingType=" + shardingType);
         shardingNumber = Integer.parseInt(prop.getProperty("shardingNumber", "1"));
         log.info("shardingNumber=" + shardingNumber);
-        routeItemByHint = Boolean.parseBoolean(prop.getProperty("routeItemByHint", Boolean.FALSE.toString()));
-        log.info("routeItemByHint=" + routeItemByHint);
         String warehousesAvailableRanges = prop.getProperty("warehousesAvailableRanges", "").replace(" ", "");
         log.info("warehousesAvailableRanges=" + warehousesAvailableRanges);
         availableWarehouses = parseWarehousesAvailableRanges(warehousesAvailableRanges);
         useMultiValuesInsert = Boolean.parseBoolean(prop.getProperty("useMultiValuesInsert", Boolean.FALSE.toString()));
         log.info("useMultiValuesInsert=" + useMultiValuesInsert);
+        itemIsBroadcastTable = Boolean.parseBoolean(prop.getProperty("itemIsBroadcastTable", Boolean.FALSE.toString()));
+        log.info("itemIsBroadcastTable=" + itemIsBroadcastTable);
     }
     
     private int[] parseWarehousesAvailableRanges(String warehousesAvailableRanges) {
