@@ -36,7 +36,7 @@ public class ShardingNumber {
                 }
             }
             case RANGE -> {
-                int range = ShardingConfig.instance.warehouseTotal / ShardingConfig.instance.shardingNumber;
+                int range = ShardingConfig.instance.configuration.getWarehouses() / ShardingConfig.instance.shardingNumber;
                 return rndWarehouse - range * ((rndWarehouse - 1) / range - (warehouse - 1) / range);
             }
             case NONE -> {

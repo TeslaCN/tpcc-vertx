@@ -2,6 +2,7 @@ package icu.wwj.benchmark.tpcc.sharding;/*
  * Copyright (c) @ justbk. 2021-2031. All rights reserved.
  */
 
+import icu.wwj.benchmark.tpcc.config.BenchmarkConfiguration;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Locale;
@@ -28,9 +29,7 @@ public class ShardingConfig {
     
     private static final Pattern NUMBER_RANGES_PATTERN = Pattern.compile("\\d+(-\\d+)?(,\\d+(-\\d+)?)*");
     
-    public int terminals;
-    
-    public int warehouseTotal;
+    public BenchmarkConfiguration configuration;
     
     public ShardingType shardingType;
     
@@ -42,24 +41,23 @@ public class ShardingConfig {
     
     public boolean itemIsBroadcastTable;
     
-    public void init(Properties prop) {
-        warehouseTotal = Integer.parseInt(prop.getProperty("warehouses"));
-        terminals = Integer.parseInt(prop.getProperty("terminals"));
-        shardingType = ShardingType.valueOf(prop.getProperty("shardingType", "MOD").toUpperCase(Locale.ROOT));
+    public void init(BenchmarkConfiguration configuration, Properties prop) {
+        this.configuration = configuration;
+        shardingType = ShardingType.valueOf(System.getProperty("shardingType", prop.getProperty("shardingType", "MOD")).toUpperCase(Locale.ROOT));
         log.info("shardingType=" + shardingType);
-        shardingNumber = Integer.parseInt(prop.getProperty("shardingNumber", "1"));
+        shardingNumber = Integer.parseInt(System.getProperty("shardingNumber", prop.getProperty("shardingNumber", "1")));
         log.info("shardingNumber=" + shardingNumber);
-        String warehousesAvailableRanges = prop.getProperty("warehousesAvailableRanges", "").replace(" ", "");
+        String warehousesAvailableRanges = System.getProperty("warehousesAvailableRanges", prop.getProperty("warehousesAvailableRanges", "")).replace(" ", "");
         log.info("warehousesAvailableRanges=" + warehousesAvailableRanges);
         availableWarehouses = parseWarehousesAvailableRanges(warehousesAvailableRanges);
-        useMultiValuesInsert = Boolean.parseBoolean(prop.getProperty("useMultiValuesInsert", Boolean.FALSE.toString()));
+        useMultiValuesInsert = Boolean.parseBoolean(System.getProperty("useMultiValuesInsert", prop.getProperty("useMultiValuesInsert", Boolean.FALSE.toString())));
         log.info("useMultiValuesInsert=" + useMultiValuesInsert);
-        itemIsBroadcastTable = Boolean.parseBoolean(prop.getProperty("itemIsBroadcastTable", Boolean.FALSE.toString()));
+        itemIsBroadcastTable = Boolean.parseBoolean(System.getProperty("itemIsBroadcastTable", prop.getProperty("itemIsBroadcastTable", Boolean.FALSE.toString())));
         log.info("itemIsBroadcastTable=" + itemIsBroadcastTable);
     }
     
     private int[] parseWarehousesAvailableRanges(String warehousesAvailableRanges) {
-        Set<Integer> totalWarehouses = IntStream.rangeClosed(1, warehouseTotal).boxed().collect(Collectors.toCollection(TreeSet::new));
+        Set<Integer> totalWarehouses = IntStream.rangeClosed(1, configuration.getWarehouses()).boxed().collect(Collectors.toCollection(TreeSet::new));
         if (warehousesAvailableRanges.isBlank()) {
             return setToArray(totalWarehouses);
         }
@@ -75,13 +73,13 @@ public class ShardingConfig {
                 int upperInclusive = Integer.parseInt(split[1]);
                 Set<Integer> range = IntStream.rangeClosed(lowerInclusive, upperInclusive).boxed().collect(Collectors.toSet());
                 if (!totalWarehouses.containsAll(range)) {
-                    throw new IllegalArgumentException("Invalid warehousesAvailableRanges value " + eachRange + ". Range should distribute in [1," + warehouseTotal + "]");
+                    throw new IllegalArgumentException("Invalid warehousesAvailableRanges value " + eachRange + ". Range should distribute in [1," + configuration.getWarehouses() + "]");
                 }
                 availableWarehouses.addAll(range);
             } else {
                 int warehouse = Integer.parseInt(eachRange);
                 if (!totalWarehouses.contains(warehouse)) {
-                    throw new IllegalArgumentException("Invalid warehousesAvailableRanges value " + warehouse + ". Range should distribute in [1," + warehouseTotal + "]");
+                    throw new IllegalArgumentException("Invalid warehousesAvailableRanges value " + warehouse + ". Range should distribute in [1," + configuration.getWarehouses() + "]");
                 }
                 availableWarehouses.add(warehouse);
             }
